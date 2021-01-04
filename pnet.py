@@ -41,11 +41,15 @@ class Pnet(nx.MultiDiGraph):
     def terminals(self):
         return set(nx.get_edge_attributes(self,'label').values())
 
-    def width(self):
-        return len(list(nx.all_simple_edge_paths(self, Pnet._start, Pnet._end)))
+    def width(self, start=None, end=None):
+        start = start if start is not None else Pnet._start
+        start = end if end is not None else Pnet._end
+        return len(list(nx.all_simple_edge_paths(self, start, end)))
 
-    def length(self):
-        return len(max(list(nx.all_simple_edge_paths(self, Pnet._start, Pnet._end)), key = len))
+    def length(self, start=None, end=None):
+        start = start if start is not None else Pnet._start
+        start = end if end is not None else Pnet._end
+        return len(max(list(nx.all_simple_edge_paths(self, start, end)), key = len))
 
     def get_sents(self):
         paths = nx.all_simple_edge_paths(self, Pnet._start, Pnet._end)
