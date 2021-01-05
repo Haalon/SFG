@@ -22,10 +22,36 @@ class Pnet(nx.MultiDiGraph):
 
     def add_sents(self, sent_list):
         for sent in sent_list:
-            self.add_sent(sent)
+            self.merge_sent(sent)
 
-    def add_sent(self, sent):
+
+    def get_next(self, node, char):
+        labeled_edges = [edge for edge in self.out_edges(node, keys=True) if edge[2].startswith(char)]
+
+        if len(labeled_edges) == 0:
+            return None
+
+        if len(labeled_edges) > 1:
+            raise ValueError("Net should not have outgoing edges starting with same symbol")
+
+        return labeled_edges[0][1]
+
+
+    def merge_sent(self, sent):
         prev = Pnet._start
+
+        for i, char in enumerate(sent):
+            next_node = self.get_next(prev, char)
+            if next_node == None:
+                self.add_sent(sent[i:], prev)
+                return
+
+            prev = next_node
+
+        raise ValueError("No sent should be a prefix of another sentence")
+
+    def add_sent(self, sent, start=None):
+        prev = start if start is not None else Pnet._start
 
         for i, char in enumerate(sent):
             # if we are on the final char - draw edge to the end polus of the net
@@ -84,8 +110,3 @@ class Pnet(nx.MultiDiGraph):
 
         plt.axis('off')
         plt.show()
-
-
-                
-
-
