@@ -1,8 +1,7 @@
 import networkx as nx
 import math 
 import matplotlib.pyplot as plt
-from networkx.drawing.nx_agraph import write_dot, graphviz_layout
-
+import matplotlib.patches as mpatches
 
 class Pnet(nx.MultiDiGraph):
     """docstring for Pnet"""
@@ -25,8 +24,8 @@ class Pnet(nx.MultiDiGraph):
             self.merge_sent(sent)
 
 
-    def get_next(self, node, char):
-        labeled_edges = [edge for edge in self.out_edges(node, keys=True) if edge[2].startswith(char)]
+    def get_next(self, node, word_or_char):
+        labeled_edges = [edge for edge in self.out_edges(node, keys=True) if edge[2] == word_or_char]
 
         if len(labeled_edges) == 0:
             return None
@@ -40,8 +39,8 @@ class Pnet(nx.MultiDiGraph):
     def merge_sent(self, sent):
         prev = Pnet._start
 
-        for i, char in enumerate(sent):
-            next_node = self.get_next(prev, char)
+        for i, word_or_char in enumerate(sent):
+            next_node = self.get_next(prev, word_or_char)
             if next_node == None:
                 self.add_sent(sent[i:], prev)
                 return
@@ -53,29 +52,42 @@ class Pnet(nx.MultiDiGraph):
     def add_sent(self, sent, start=None):
         prev = start if start is not None else Pnet._start
 
-        for i, char in enumerate(sent):
+        for i, word_or_char in enumerate(sent):
             # if we are on the final char - draw edge to the end polus of the net
             if i == len(sent) - 1:
-                self.add_edge(prev, Pnet._end, label=char, key=char)
+                self.add_edge(prev, Pnet._end, label=word_or_char, key=word_or_char)
                 break;
 
             self.node_id += 1
-            self.add_node(self.node_id, label=char)
-            self.add_edge(prev, self.node_id, label=char, key=char)
+            self.add_node(self.node_id, label=word_or_char)
+            self.add_edge(prev, self.node_id, label=word_or_char, key=word_or_char)
             prev = self.node_id
+
+    def is_transit_node(self, node):
+        return self.out_degree(node) == self.in_degree(node) == 1
+
+    def subnet(self, start, end):
+        desc = nx.descendants(self, start)
+        if end not in desc:
+            return None
+
+        ancs = nx.ancestors(self, end)
+
+        return self.subgraph(desc).subgraph(ancs)
+
 
     def terminals(self):
         return set(nx.get_edge_attributes(self,'label').values())
 
-    def width(self, start=None, end=None):
+    def height(self, start=None, end=None):
         start = start if start is not None else Pnet._start
-        start = end if end is not None else Pnet._end
+        end = end if end is not None else Pnet._end
         return len(list(nx.all_simple_edge_paths(self, start, end)))
 
     def length(self, start=None, end=None):
         start = start if start is not None else Pnet._start
-        start = end if end is not None else Pnet._end
-        return len(max(list(nx.all_simple_edge_paths(self, start, end)), key = len))
+        end = end if end is not None else Pnet._end
+        return len(max(list(nx.all_simple_edge_paths(self, start, end)), key=len, default=[]))
 
     def get_sents(self):
         paths = nx.all_simple_edge_paths(self, Pnet._start, Pnet._end)
@@ -88,25 +100,83 @@ class Pnet(nx.MultiDiGraph):
 
         return res
 
-    def draw(self):
-        pos = nx.spring_layout(self)
-        print(pos)
-        # pos =graphviz_layout(self, prog='dot')
+    def draw(self, scale_x=None, font_size=32, save_file=None, save_scale=10, show=True):
+        fig, ax = plt.subplots(1)
 
-        labels = nx.get_edge_attributes(self,'label')
-        node_labels = nx.get_node_attributes(self, 'label')
+        origin = (0,0)
+        scale_x = scale_x if scale_x is not None else self.height() / self.length()
+        scale_y = 1       
+        base_arrow_offset = 0.5 * scale_y
 
-        terminals = list(self.terminals())
+        cmap=plt.get_cmap('viridis')
+        node_list = list(self.nodes)
+        node_cmap = {node: i/len(node_list) for i, node in enumerate(node_list)}
 
-        val_map = {term: terminals.index(term) / len(terminals) for term in terminals}
-        values = [val_map.get(labl, 0.25) for labl in node_labels.values()]
+        def label_center(ox, oy, dx, dy, text):
+            centx = (ox + ox + dx) / 2
+            centy = (oy + oy + dy) / 2
+            plt.text(centx, centy, text, size=font_size/scale_x, va='center', ha='center')
 
+        def node_visual_height(node):
+            in_count = self.in_degree(node)
+            height = self.height(node)
+            return 2*max(height, in_count) - 1
 
-        nx.draw_networkx_nodes(self, pos, cmap=plt.get_cmap('viridis'), node_color=values)
-        nx.draw_networkx_edges(self, pos, edge_color='gray')
+        def edge_visual_length(node, child):
+            child_depth = self.length(end=child)
+            node_depth = self.length(end=node)            
+            return 2*(child_depth - node_depth) - 1
 
-        # nx.draw_networkx_labels(self, pos, font_size=8, font_family='sans-serif')
-        nx.draw_networkx_edge_labels(self,pos, edge_labels=labels)
+        total_length = 2*self.length()*scale_x
+        queue = {Pnet._end: (total_length, 0), Pnet._start: (0, 0)}
+        completed = set()
 
+        while queue:
+            new_queue = {}
+            for node, pos in queue.items():
+                if node in completed:
+                    continue
+
+                child_offset = 0
+                arrow_offset = base_arrow_offset
+
+                height = scale_y * node_visual_height(node)
+                col = cmap(node_cmap[node])
+                rect = mpatches.Rectangle(pos, scale_x, height, color=col)
+                ax.add_patch(rect)
+                label_center(pos[0], pos[1], scale_x, height, str(node))
+
+                for _, child, key, data in self.out_edges(node, keys=True, data=True):
+                    alen = scale_x*edge_visual_length(node, child)
+                    apos = (pos[0]+scale_x, pos[1] + arrow_offset)
+                    arrow = mpatches.Arrow(apos[0], apos[1], alen, 0, width=0.05/scale_x, color = 'gray')
+                    ax.add_patch(arrow)
+                    label_center(apos[0], apos[1], alen, 0, str(key))
+                    arrow_offset += 2 * scale_y
+
+                    if child not in new_queue and child not in completed:
+                        child_height = scale_y * node_visual_height(child)
+                        # 2 should be replaced with arrow length + scale_x
+                        new_queue[child] = (pos[0] + alen + scale_x, pos[1] + child_offset)
+                        child_offset += child_height + scale_y
+                        arrow_offset = child_offset + base_arrow_offset
+                    else:
+                        child_offset += 2*scale_y
+
+                completed.add(node)
+
+            queue = new_queue.copy()
+
+        plt.axis('equal')
         plt.axis('off')
-        plt.show()
+
+        plt.subplots_adjust(top = 1, bottom = 0, right = 1, left = 0, 
+            hspace = 0, wspace = 0)
+        plt.margins(0,0)
+
+        plt.tight_layout()
+        if save_file is not None:
+            plt.savefig(save_file, bbox_inches='tight', dpi=96*save_scale, pad_inches=0)
+
+        if show:
+            plt.show()
