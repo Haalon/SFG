@@ -2,30 +2,29 @@ import networkx as nx
 import math 
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
-
+import logging
 
 class Pnet(nx.MultiDiGraph):
     """docstring for Pnet"""
-
-    # should not be changed
-    _start = 0
-    _end = math.inf
     
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.node_id = Pnet._start
+    def __init__(self, sents=[]):
+        super().__init__()
+        self.start = 0
+        self.end = math.inf
+        self.next_node_id = 1
 
-        # added manually just for the labels
-        self.add_node(Pnet._start, label=Pnet._start)
-        self.add_node(Pnet._end, label=Pnet._end)
-        
+        self.add_sents(sents)
 
     def add_sents(self, sent_list):
         for sent in sent_list:
-            self.merge_sent(sent)
+            self.add_sent(sent)
 
 
-    def get_next(self, node, word_or_char):
+    def get_successor(self, node, word_or_char):
+        if node not in self:
+            return None
+
+        # edge[2] contains key
         labeled_edges = [edge for edge in self.out_edges(node, keys=True) if edge[2] == word_or_char]
 
         if len(labeled_edges) == 0:
@@ -37,66 +36,81 @@ class Pnet(nx.MultiDiGraph):
         return labeled_edges[0][1]
 
 
-    def merge_sent(self, sent):
-        prev = Pnet._start
+    def add_sent(self, sent):
+        prev = self.start
 
         for i, word_or_char in enumerate(sent):
-            next_node = self.get_next(prev, word_or_char)
+            next_node = self.get_successor(prev, word_or_char)
             if next_node == None:
-                self.add_sent(sent[i:], prev)
+                self._add_sent(sent[i:], prev)
                 return
 
             prev = next_node
 
-        raise ValueError("No sent should be a prefix of another sentence")
+        logging.warning(f"No sent should be a prefix of another sentence\nSentence {sent} will be ignored")
 
-    def add_sent(self, sent, start=None):
-        prev = start if start is not None else Pnet._start
+    def _add_sent(self, sent, start=None):
+        prev = start if start is not None else self.start
 
         for i, word_or_char in enumerate(sent):
-            # if we are on the final char - draw edge to the end polus of the net
+            # if we are on the final char - draw edge to the end node of the net
             if i == len(sent) - 1:
-                self.add_edge(prev, Pnet._end, label=word_or_char, key=word_or_char)
+                self.add_edge(prev, self.end, label=word_or_char, key=word_or_char)
                 break;
 
-            self.node_id += 1
-            self.add_node(self.node_id, label=word_or_char)
-            self.add_edge(prev, self.node_id, label=word_or_char, key=word_or_char)
-            prev = self.node_id
+            
+            self.add_node(self.next_node_id)
+            self.add_edge(prev, self.next_node_id, key=word_or_char)
+            prev = self.next_node_id
+
+            # just to be sure, may also help later in case of combined p-nets
+            while self.next_node_id in self:
+                self.next_node_id += 1
 
     def is_transit_node(self, node):
         return self.out_degree(node) == self.in_degree(node) == 1
 
-    def subnet(self, start, end):
+
+    def subnet(self, start=None, end=None):
+        start = start if start is not None else self.start
+        end = end if end is not None else self.end
+
         desc = nx.descendants(self, start)
+        desc.add(start)
+
         if end not in desc:
             return None
 
         ancs = nx.ancestors(self, end)
+        ancs.add(end)
+        new_net = self.subgraph(desc.intersection(ancs))
 
-        return self.subgraph(desc).subgraph(ancs)
-
+        nx.relabel_nodes(new_net, {end: math.inf}, copy=False)
+        new_net.start = start
+        new_net.end = math.inf
+        new_net.next_node_id = end
+        return new_net
 
     def terminals(self):
         return set(nx.get_edge_attributes(self,'label').values())
 
     def height(self, start=None, end=None):
-        start = start if start is not None else Pnet._start
-        end = end if end is not None else Pnet._end
+        start = start if start is not None else self.start
+        end = end if end is not None else self.end
         return len(list(nx.all_simple_edge_paths(self, start, end)))
 
     def length(self, start=None, end=None):
-        start = start if start is not None else Pnet._start
-        end = end if end is not None else Pnet._end
+        start = start if start is not None else self.start
+        end = end if end is not None else self.end
         return len(max(list(nx.all_simple_edge_paths(self, start, end)), key=len, default=[]))
 
     def get_sents(self):
-        paths = nx.all_simple_edge_paths(self, Pnet._start, Pnet._end)
+        paths = nx.all_simple_edge_paths(self, self.start, self.end)
         res = []
         for path in paths:
             sent = ''
             for edge in path:
-                sent += self.edges[edge]['label']
+                sent += self.edges[edge][2]
             res.append(sent)
 
         return res
@@ -130,7 +144,7 @@ class Pnet(nx.MultiDiGraph):
             return 2*(child_depth - node_depth) - 1
 
         total_length = 2*self.length()*scale_x
-        queue = {Pnet._end: (total_length, 0), Pnet._start: (0, 0)}
+        queue = {self.end: (total_length, 0), self.start: (0, 0)}
         completed = set()
 
         while queue:
