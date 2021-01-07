@@ -3,6 +3,7 @@ import math
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 
+
 class Pnet(nx.MultiDiGraph):
     """docstring for Pnet"""
 
@@ -100,7 +101,7 @@ class Pnet(nx.MultiDiGraph):
 
         return res
 
-    def draw(self, scale_x=None, font_size=32, save_file=None, save_scale=10, show=True):
+    def draw(self, scale_x=None, font_size=32, filename=None, dpi=960, show=True):
         fig, ax = plt.subplots(1)
 
         origin = (0,0)
@@ -109,7 +110,7 @@ class Pnet(nx.MultiDiGraph):
         base_arrow_offset = 0.5 * scale_y
 
         cmap=plt.get_cmap('viridis')
-        node_list = list(self.nodes)
+        node_list = sorted(list(self.nodes))
         node_cmap = {node: i/len(node_list) for i, node in enumerate(node_list)}
 
         def label_center(ox, oy, dx, dy, text):
@@ -122,6 +123,7 @@ class Pnet(nx.MultiDiGraph):
             height = self.height(node)
             return 2*max(height, in_count) - 1
 
+        # get edge length as difference between node and child depth from origin
         def edge_visual_length(node, child):
             child_depth = self.length(end=child)
             node_depth = self.length(end=node)            
@@ -141,8 +143,8 @@ class Pnet(nx.MultiDiGraph):
                 arrow_offset = base_arrow_offset
 
                 height = scale_y * node_visual_height(node)
-                col = cmap(node_cmap[node])
-                rect = mpatches.Rectangle(pos, scale_x, height, color=col)
+                col = cmap(node_cmap[node]); ec = cmap(1-node_cmap[node])
+                rect = mpatches.Rectangle(pos, scale_x, height, color=col, ec=ec)
                 ax.add_patch(rect)
                 label_center(pos[0], pos[1], scale_x, height, str(node))
 
@@ -170,13 +172,13 @@ class Pnet(nx.MultiDiGraph):
         plt.axis('equal')
         plt.axis('off')
 
-        plt.subplots_adjust(top = 1, bottom = 0, right = 1, left = 0, 
-            hspace = 0, wspace = 0)
+        # removes white padding in the saved image
+        plt.subplots_adjust(top=1, bottom=0, right=1, left=0, hspace=0, wspace=0)
         plt.margins(0,0)
 
         plt.tight_layout()
-        if save_file is not None:
-            plt.savefig(save_file, bbox_inches='tight', dpi=96*save_scale, pad_inches=0)
+        if filename is not None:
+            plt.savefig(filename, bbox_inches='tight', dpi=dpi, pad_inches=0)
 
         if show:
             plt.show()
