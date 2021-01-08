@@ -104,8 +104,10 @@ class Pnet(nx.MultiDiGraph):
         end = end if end is not None else self.end
         return len(max(list(nx.all_simple_edge_paths(self, start, end)), key=len, default=[]))
 
-    def get_sents(self):
-        paths = nx.all_simple_edge_paths(self, self.start, self.end)
+    def get_sents(self, start=None, end=None):
+        start = start if start is not None else self.start
+        end = end if end is not None else self.end
+        paths = nx.all_simple_edge_paths(self, start, end)
         res = []
         for path in paths:
             sent = ''
