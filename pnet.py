@@ -19,35 +19,22 @@ class Pnet(nx.MultiDiGraph):
         for sent in sent_list:
             self.add_sent(sent)
 
-
-    def get_successor(self, node, word_or_char):
-        if node not in self:
-            return None
-
-        # edge[2] contains key
-        labeled_edges = [edge for edge in self.out_edges(node, keys=True) if edge[2] == word_or_char]
-
-        if len(labeled_edges) == 0:
-            return None
-
-        if len(labeled_edges) > 1:
-            raise ValueError("Net should not have outgoing edges starting with same symbol")
-
-        return labeled_edges[0][1]
-
-
     def add_sent(self, sent):
         prev = self.start
 
         for i, word_or_char in enumerate(sent):
-            next_node = self.get_successor(prev, word_or_char)
+            next_node = self.next_node_by_key(prev, word_or_char)
+            if next_node == self.end:
+                logging.warning(f"No sentence should be a prefix of another one. Sentence '{sent}' will be ignored")
+                return
+
             if next_node == None:
                 self._add_sent(sent[i:], prev)
                 return
 
             prev = next_node
 
-        logging.warning(f"No sent should be a prefix of another sentence\nSentence {sent} will be ignored")
+        logging.warning(f"No sentence should be a prefix of another one. Sentence '{sent}' will be ignored")
 
     def _add_sent(self, sent, start=None):
         prev = start if start is not None else self.start
@@ -66,6 +53,34 @@ class Pnet(nx.MultiDiGraph):
             # just to be sure, may also help later in case of combined p-nets
             while self.next_node_id in self:
                 self.next_node_id += 1
+
+    def subnet_list(self):
+        start_nodes = {node: self.out_degree(node) for node in self.nodes() if self.out_degree(node) > 1 or node == self.start}
+
+        subnets = []
+
+        for node, out_degree in start_nodes.items():
+            for path_node in nx.shortest_path(self, node, self.end):
+                if path_node != node and self.in_degree(path_node) >= out_degree:
+                    subnets.append((node, path_node))
+                    break
+
+        return subnets
+
+    def next_node_by_key(self, node, key):
+        if node not in self:
+            return None
+
+        # edge[2] contains key
+        labeled_edges = [edge for edge in self.out_edges(node, keys=True) if edge[2] == key]
+
+        if len(labeled_edges) == 0:
+            return None
+
+        if len(labeled_edges) > 1:
+            raise ValueError("Net should not have outgoing edges starting with same symbol")
+
+        return labeled_edges[0][1]
 
     def is_transit_node(self, node):
         return self.out_degree(node) == self.in_degree(node) == 1
@@ -107,6 +122,7 @@ class Pnet(nx.MultiDiGraph):
     def get_sents(self, start=None, end=None):
         start = start if start is not None else self.start
         end = end if end is not None else self.end
+
         paths = nx.all_simple_edge_paths(self, start, end)
         res = []
         for path in paths:
