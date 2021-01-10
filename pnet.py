@@ -4,6 +4,8 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import logging
 
+from utils import hierarchy_pos
+
 class Pnet(nx.MultiDiGraph):
     """docstring for Pnet"""
     
@@ -54,19 +56,6 @@ class Pnet(nx.MultiDiGraph):
             while self.next_node_id in self:
                 self.next_node_id += 1
 
-    def subnet_list(self):
-        start_nodes = {node: self.out_degree(node) for node in self.nodes() if self.out_degree(node) > 1 or node == self.start}
-
-        subnets = []
-
-        for node, out_degree in start_nodes.items():
-            for path_node in nx.shortest_path(self, node, self.end):
-                if path_node != node and self.in_degree(path_node) >= out_degree:
-                    subnets.append((node, path_node))
-                    break
-
-        return subnets
-
     def next_node_by_key(self, node, key):
         if node not in self:
             return None
@@ -84,27 +73,6 @@ class Pnet(nx.MultiDiGraph):
 
     def is_transit_node(self, node):
         return self.out_degree(node) == self.in_degree(node) == 1
-
-
-    def subnet(self, start=None, end=None):
-        start = start if start is not None else self.start
-        end = end if end is not None else self.end
-
-        desc = nx.descendants(self, start)
-        desc.add(start)
-
-        if end not in desc:
-            return None
-
-        ancs = nx.ancestors(self, end)
-        ancs.add(end)
-        new_net = self.subgraph(desc.intersection(ancs))
-
-        nx.relabel_nodes(new_net, {end: math.inf}, copy=False)
-        new_net.start = start
-        new_net.end = math.inf
-        new_net.next_node_id = end
-        return new_net
 
     def terminals(self):
         return set(nx.get_edge_attributes(self,'label').values())
@@ -133,7 +101,88 @@ class Pnet(nx.MultiDiGraph):
 
         return res
 
-    def draw(self, scale_x=None, font_size=32, filename=None, dpi=960, show=True):
+
+    def subnet(self, start=None, end=None):
+        start = start if start is not None else self.start
+        end = end if end is not None else self.end
+
+        desc = nx.descendants(self, start)
+        desc.add(start)
+
+        if end not in desc:
+            return None
+
+        ancs = nx.ancestors(self, end)
+        ancs.add(end)
+        new_net = self.subgraph(desc.intersection(ancs))
+
+        nx.relabel_nodes(new_net, {end: math.inf}, copy=False)
+        new_net.start = start
+        new_net.end = math.inf
+        new_net.next_node_id = end
+        return new_net
+
+    def in_subnet(self, subnet, node):
+        s_start, s_end = subnet
+
+        if s_start == node or s_end == node:
+            return True
+
+        desc = nx.descendants(self, s_start)
+        ancs = nx.ancestors(self, s_end)
+
+        return node in desc and node in ancs
+
+    def subnet_list(self):
+        start_nodes = {node: self.out_degree(node) for node in self.nodes() if self.out_degree(node) > 1 or node == self.start}
+
+        subnets = []
+
+        for node, out_degree in start_nodes.items():
+            for i, path_node in enumerate(nx.shortest_path(self, node, self.end)):
+                if path_node != node and self.in_degree(path_node) >= out_degree:
+                    subnets.append((node, path_node))
+                    break
+
+        return subnets
+
+    def subnet_tree(self, subnet_list=None):
+        subnet_list = subnet_list if subnet_list is not None else self.subnet_list()
+        subnet_lens = {(s,e): self.length(s,e) for s,e in subnet_list}
+
+        tree = nx.DiGraph()
+
+        for s,e in subnet_list:
+            enveloping_subnets = [subnet for subnet in subnet_list if self.in_subnet(subnet, s) and self.in_subnet(subnet, e)]
+            enveloping_subnets.remove((s, e))
+
+            min_enveloping_subnet = min(enveloping_subnets, default=None, key = lambda subnet: subnet_lens[subnet])
+            
+            if min_enveloping_subnet is None:
+                tree.add_node((s,e))
+            else:
+                tree.add_edge(min_enveloping_subnet, (s,e))
+
+        return tree
+
+    def draw_subnet_tree(self, subnet_tree=None, cmap='viridis', filename=None, dpi=960, show=True, **kwargs):
+        subnet_tree = subnet_tree if subnet_tree is not None else self.subnet_tree()
+        pos = hierarchy_pos(subnet_tree,(self.start, self.end))
+
+        node_list = sorted(list(self.nodes))
+        node_cmap = [i/len(node_list) for i, _ in enumerate(node_list)]
+        tree_cmap = [col for i, col in enumerate(node_cmap) if self.out_degree(node_list[i]) > 1 or node_list[i] == self.start]
+
+        fig = plt.figure()
+        nx.draw(subnet_tree, ax=fig.add_subplot(111), pos=pos, with_labels=True, node_color=tree_cmap, cmap=cmap, **kwargs)
+
+        if filename is not None:
+            plt.savefig(filename, bbox_inches='tight', dpi=dpi, pad_inches=0)
+
+        if show:
+            plt.show()
+
+    def draw(self, scale_x=None, font_size=32, font_color='black', cmap='viridis', filename=None, dpi=960, show=True):
         fig, ax = plt.subplots(1)
 
         origin = (0,0)
@@ -141,14 +190,14 @@ class Pnet(nx.MultiDiGraph):
         scale_y = 1       
         base_arrow_offset = 0.5 * scale_y
 
-        cmap=plt.get_cmap('viridis')
+        cmap=plt.get_cmap(cmap)
         node_list = sorted(list(self.nodes))
         node_cmap = {node: i/len(node_list) for i, node in enumerate(node_list)}
 
         def label_center(ox, oy, dx, dy, text):
             centx = (ox + ox + dx) / 2
             centy = (oy + oy + dy) / 2
-            plt.text(centx, centy, text, size=font_size/scale_x, va='center', ha='center')
+            plt.text(centx, centy, text, size=font_size/scale_x, va='center', ha='center', color=font_color)
 
         def node_visual_height(node):
             in_count = self.in_degree(node)
