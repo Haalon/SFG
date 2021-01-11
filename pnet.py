@@ -17,17 +17,25 @@ class Pnet(nx.MultiDiGraph):
 
         self.add_sents(sents)
 
-    def add_sents(self, sent_list):
+    def add_sents(self, sent_list, on_collision='warn'):
         for sent in sent_list:
-            self.add_sent(sent)
+            self.add_sent(sent, on_collision='warn')
 
-    def add_sent(self, sent):
+    def add_sent(self, sent, on_collision='warn'):
+        def handle_collision(sent):
+            if   on_collision == 'warn':
+                logging.warning(f"No sentence should be a prefix of another one. Sentence '{sent}' will be ignored")
+            elif on_collision == 'none':
+                pass
+            else:
+                raise ValueError(f"No sentence should be a prefix of another one. Sentence '{sent}' caused a collision")
+
         prev = self.start
 
         for i, word_or_char in enumerate(sent):
             next_node = self.next_node_by_key(prev, word_or_char)
             if next_node == self.end:
-                logging.warning(f"No sentence should be a prefix of another one. Sentence '{sent}' will be ignored")
+                handle_collision(sent)
                 return
 
             if next_node == None:
@@ -36,7 +44,7 @@ class Pnet(nx.MultiDiGraph):
 
             prev = next_node
 
-        logging.warning(f"No sentence should be a prefix of another one. Sentence '{sent}' will be ignored")
+        handle_collision(sent)
 
     def _add_sent(self, sent, start=None):
         prev = start if start is not None else self.start
@@ -87,20 +95,32 @@ class Pnet(nx.MultiDiGraph):
         end = end if end is not None else self.end
         return len(max(list(nx.all_simple_edge_paths(self, start, end)), key=len, default=[]))
 
-    def get_sents(self, start=None, end=None):
+    def get_sents(self, start=None, end=None, cutoff=None, concat=True):
         start = start if start is not None else self.start
         end = end if end is not None else self.end
 
-        paths = nx.all_simple_edge_paths(self, start, end)
-        res = []
+        paths = nx.all_simple_edge_paths(self, start, end, cutoff=cutoff)
+        
         for path in paths:
-            sent = ''
-            for edge in path:
-                sent += self.edges[edge][2]
-            res.append(sent)
+            sent = '' if concat else []
+            for _,_, word in path:
+                sent += word
+            yield tuple(sent)        
+
+    def likelihood(self, other, t=None):
+        o_sents = set(other.get_sents(cutoff=t, concat=False))
+        s_sents = set(self.get_sents(cutoff=t, concat=False))
+
+        return False if o_sents.symmetric_difference(s_sents) else True
+
+    def compose(self, other):
+        o_sents = other.get_sents()
+        s_sents = self.get_sents()
+        
+        res = Pnet(s_sents)
+        res.add_sents(o_sents, on_collision='error')
 
         return res
-
 
     def subnet(self, start=None, end=None):
         start = start if start is not None else self.start
