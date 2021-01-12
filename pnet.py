@@ -24,11 +24,16 @@ class Pnet(nx.MultiDiGraph):
 
         self.add_sents(data)
 
-    def add_sents(self, sent_list, on_collision='warn'):
+    def add_sents(self, sent_list, start=None, end=None, on_collision='warn'):
+        start = start if start is not None else self.start
+        end = end if end is not None else self.end
         for sent in sent_list:
-            self.add_sent(sent, on_collision='warn')
+            self.add_sent(sent, start, end, on_collision=on_collision)
 
-    def add_sent(self, sent, on_collision='warn'):
+    def add_sent(self, sent, start=None, end=None, on_collision='warn'):
+        start = start if start is not None else self.start
+        end = end if end is not None else self.end
+
         def handle_collision(sent):
             if   on_collision == 'warn':
                 logging.warning(f"No sentence should be a prefix of another one. Sentence '{sent}' will be ignored")
@@ -37,29 +42,30 @@ class Pnet(nx.MultiDiGraph):
             else:
                 raise ValueError(f"No sentence should be a prefix of another one. Sentence '{sent}' caused a collision")
 
-        prev = self.start
+        prev = start
 
         for i, word_or_char in enumerate(sent):
             next_node = self.next_node_by_key(prev, word_or_char)
-            if next_node == self.end:
+            if next_node == end:
                 handle_collision(sent)
                 return
 
             if next_node == None:
-                self._add_sent(sent[i:], prev)
+                self._add_sent(sent[i:], prev, end)
                 return
 
             prev = next_node
 
         handle_collision(sent)
 
-    def _add_sent(self, sent, start=None):
+    def _add_sent(self, sent, start=None, end=None):
         prev = start if start is not None else self.start
+        end = end if end is not None else self.end
 
         for i, word_or_char in enumerate(sent):
             # if we are on the final char - draw edge to the end node of the net
             if i == len(sent) - 1:
-                self.add_edge(prev, self.end, label=word_or_char, key=word_or_char)
+                self.add_edge(prev, end, label=word_or_char, key=word_or_char)
                 break;
 
             
@@ -102,7 +108,7 @@ class Pnet(nx.MultiDiGraph):
         end = end if end is not None else self.end
         return len(max(list(nx.all_simple_edge_paths(self, start, end)), key=len, default=[]))
 
-    def get_sents(self, start=None, end=None, cutoff=None, concat=True):
+    def sents(self, start=None, end=None, cutoff=None, concat=True):
         start = start if start is not None else self.start
         end = end if end is not None else self.end
 
@@ -115,19 +121,17 @@ class Pnet(nx.MultiDiGraph):
             yield tuple(sent)        
 
     def likelihood(self, other, t=None):
-        o_sents = set(other.get_sents(cutoff=t, concat=False))
-        s_sents = set(self.get_sents(cutoff=t, concat=False))
+        o_sents = set(other.sents(cutoff=t, concat=False))
+        s_sents = set(self.sents(cutoff=t, concat=False))
 
         return False if o_sents.symmetric_difference(s_sents) else True
 
-    def compose(self, other):
-        o_sents = other.get_sents()
-        s_sents = self.get_sents()
-        
-        res = Pnet(s_sents)
-        res.add_sents(o_sents, on_collision='error')
+    def compose(self, other, start=None, end=None, on_collision='error'):
+        start = start if start is not None else self.start
+        end = end if end is not None else self.end
 
-        return res
+        o_sents = other.sents()
+        self.add_sents(o_sents, start, end, on_collision=on_collision)
 
     def collapse(self, start=None, end=None):
         start = start if start is not None else self.start
@@ -194,7 +198,6 @@ class Pnet(nx.MultiDiGraph):
 
         return min(enveloping_subnets, default=None, key = lambda subnet: subnet_lens[subnet])
 
-
     def subnet_list(self):
         start_nodes = {node: self.out_degree(node) for node in self.nodes() if self.out_degree(node) > 1 or node == self.start}
 
@@ -258,9 +261,9 @@ class Pnet(nx.MultiDiGraph):
             plt.text(centx, centy, text, size=font_size/scale_x, va='center', ha='center', color=font_color)
 
         def node_visual_height(node):
-            in_count = self.in_degree(node)
-            height = self.height(node)
-            return 2*max(height, in_count) - 1
+            in_height = self.height(end=node)
+            out_height = self.height(start=node)
+            return 2*max(out_height, in_height) - 1
 
         # get edge length as difference between node and child depth from origin
         def edge_visual_length(node, child):
@@ -268,45 +271,50 @@ class Pnet(nx.MultiDiGraph):
             node_depth = self.length(end=node)            
             return 2*(child_depth - node_depth) - 1
 
-        total_length = 2*self.length()*scale_x
-        queue = {self.end: (total_length, 0), self.start: (0, 0)}
+        queue = [(self.start, (0, 0))]
         completed = set()
 
         while queue:
-            new_queue = {}
-            for node, pos in queue.items():
-                if node in completed:
-                    continue
+            
+            new_nodes = set()
+            node, pos = queue.pop(0)
+            if node in completed:
+                continue
 
-                child_offset = 0
-                arrow_offset = base_arrow_offset
+            child_offset = 0
+            arrow_offset = base_arrow_offset
 
-                height = scale_y * node_visual_height(node)
-                col = cmap(node_cmap[node]); ec = cmap(1-node_cmap[node])
-                rect = mpatches.Rectangle(pos, scale_x, height, color=col, ec=ec)
-                ax.add_patch(rect)
-                label_center(pos[0], pos[1], scale_x, height, str(node))
+            height = scale_y * node_visual_height(node)
+            col = cmap(node_cmap[node]); ec = cmap(1-node_cmap[node])
+            rect = mpatches.Rectangle(pos, scale_x, height, color=col, ec=ec)
+            ax.add_patch(rect)
+            label_center(pos[0], pos[1], scale_x, height, str(node))
+            new_queue=[]
 
-                for _, child, key, data in self.out_edges(node, keys=True, data=True):
-                    alen = scale_x*edge_visual_length(node, child)
-                    apos = (pos[0]+scale_x, pos[1] + arrow_offset)
-                    arrow = mpatches.Arrow(apos[0], apos[1], alen, 0, width=0.05/scale_x, color = 'gray')
-                    ax.add_patch(arrow)
-                    label_center(apos[0], apos[1], alen, 0, str(key))
-                    arrow_offset += 2 * scale_y
+            for _, child, key in self.out_edges(node, keys=True):
+                alen = scale_x*edge_visual_length(node, child)
+                apos = (pos[0]+scale_x, pos[1] + arrow_offset)
+                arrow = mpatches.Arrow(apos[0], apos[1], alen, 0, width=0.05/scale_x, color = 'gray')
+                ax.add_patch(arrow)
+                label_center(apos[0], apos[1], alen, 0, str(key))
+                arrow_offset += 2 * scale_y
 
-                    if child not in new_queue and child not in completed:
-                        child_height = scale_y * node_visual_height(child)
-                        # 2 should be replaced with arrow length + scale_x
-                        new_queue[child] = (pos[0] + alen + scale_x, pos[1] + child_offset)
+                if child not in new_nodes and child not in completed:
+                    child_height = scale_y * node_visual_height(child)
+                    # 2 should be replaced with arrow length + scale_x
+                    new_nodes.add(child)
+                    new_queue.append((child, (pos[0] + alen + scale_x, pos[1] + child_offset)))
+                    if edge_visual_length(node, child) == 1:
                         child_offset += child_height + scale_y
                         arrow_offset = child_offset + base_arrow_offset
                     else:
                         child_offset += 2*scale_y
+                else:
+                    child_offset += 2*scale_y
 
-                completed.add(node)
-
-            queue = new_queue.copy()
+            completed.add(node)
+            # put newest nodes first - thus makin it kinda like depth-first search
+            queue = new_queue + queue
 
         plt.axis('equal')
         plt.axis('off')

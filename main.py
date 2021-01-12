@@ -5,7 +5,7 @@ import networkx as nx
 from pnet import Pnet
 
 MAX_DEPTH = 6
-MAX_LENGTH = 9
+MAX_LENGTH = 5
 GRAMMAR = '''
 S -> 'S' A B | 's' C
 A -> 'A' A C | 'a'
