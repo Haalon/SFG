@@ -151,20 +151,9 @@ class Pnet(nx.MultiDiGraph):
         start = start if start is not None else self.start
         end = end if end is not None else self.end
 
-        desc = nx.descendants(self, start)
-        desc.add(start)
+        sents = self.sents(start, end)
 
-        if end not in desc:
-            return None
-
-        ancs = nx.ancestors(self, end)
-        ancs.add(end)
-        new_net = self.subgraph(desc.intersection(ancs))
-
-        nx.relabel_nodes(new_net, {end: math.inf}, copy=False)
-        new_net.start = start
-        new_net.end = math.inf
-        new_net.next_node_id = end
+        new_net = Pnet(sents)
         return new_net
 
     def in_subnet(self, subnet, node, edge_cases=True):
@@ -178,38 +167,56 @@ class Pnet(nx.MultiDiGraph):
 
         return node in desc and node in ancs
 
-    def enveloping_subnet(self, node_or_subnet, subnet_list=None):
-        if node_or_subnet == self.start or node_or_subnet == self.end:
+    def envelope_node(self, node, mode='start'):
+        if mode == 'start':
+            if node == self.start:
+                return (self.start, self.end)
+            if node == self.end:
+                return None
+
+            out_edges = self.out_edges(node)
+            for path_node in nx.shortest_path(self, node, self.end):
+                if all(path_node == next or path_node in nx.descendants(self, next) for _,next in out_edges):
+                    return (node, path_node)
             return None
 
-        if node_or_subnet == (self.start, self.end):
+        if mode == 'end':
+            if node == self.end:
+                return (self.start, self.end)
+            if node == self.start:
+                return None
+
+            in_edges = self.in_edges(node)
+            res = None
+            for path_node in nx.shortest_path(self, self.start, node):
+                if all(path_node == prev or path_node in nx.ancestors(self, prev) for prev,_ in in_edges):
+                    res = (path_node, node)
+            return res
+
+        if mode == 'inner':
+            if node == self.end or node == self.start:
+                return None
+            
+            for path_node in nx.shortest_path(self, node, self.end):
+                if path_node != node and any(node != prev and node not in nx.ancestors(self, prev) for prev,_ in self.in_edges(path_node)):
+                    return self.envelope_node(path_node, mode='end')
+            return (self.start, self.end)
+
+    def envelope_subnet(self, subnet, subnet_list=None, node_mode='inside'):
+        if subnet == (self.start, self.end):
             return None
 
         subnet_list = subnet_list if subnet_list is not None else self.subnet_list()
-        subnet_lens = {(s,e): self.length(s,e) for s,e in subnet_list}
-
-        if isinstance(node_or_subnet, int):
-            enveloping_subnets = [subnet for subnet in subnet_list if self.in_subnet(subnet, node_or_subnet, edge_cases=False)]
-        else:
-            node_flag = False
-            s, e = node_or_subnet
-            enveloping_subnets = [subnet for subnet in subnet_list if self.in_subnet(subnet, s) and self.in_subnet(subnet, e)]
-            enveloping_subnets.remove((s, e))
+        subnet_lens = {(s,e): self.length(s,e) for s,e in subnet_list}        
+        
+        s, e = subnet
+        enveloping_subnets = [subnet for subnet in subnet_list if self.in_subnet(subnet, s) and self.in_subnet(subnet, e)]
+        enveloping_subnets.remove((s, e))
 
         return min(enveloping_subnets, default=None, key = lambda subnet: subnet_lens[subnet])
 
     def subnet_list(self):
-        start_nodes = {node: self.out_degree(node) for node in self.nodes() if self.out_degree(node) > 1 or node == self.start}
-
-        subnets = []
-
-        for node, out_degree in start_nodes.items():
-            for i, path_node in enumerate(nx.shortest_path(self, node, self.end)):
-                if path_node != node and self.in_degree(path_node) >= out_degree:
-                    subnets.append((node, path_node))
-                    break
-
-        return subnets
+        return [self.envelope_node(node) for node in self.nodes() if self.out_degree(node) > 1 or node == self.start]
 
     def subnet_tree(self, subnet_list=None):
         subnet_list = subnet_list if subnet_list is not None else self.subnet_list()
@@ -217,12 +224,12 @@ class Pnet(nx.MultiDiGraph):
         tree = nx.DiGraph()
 
         for subnet in subnet_list:
-            enveloping_subnet = self.enveloping_subnet(subnet, subnet_list=subnet_list)
+            envelope_subnet = self.envelope_subnet(subnet, subnet_list=subnet_list)
             
-            if enveloping_subnet is None:
+            if envelope_subnet is None:
                 tree.add_node(subnet)
             else:
-                tree.add_edge(enveloping_subnet, subnet)
+                tree.add_edge(envelope_subnet, subnet)
 
         return tree
 
