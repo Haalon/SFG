@@ -251,7 +251,11 @@ class Pnet(nx.MultiDiGraph):
             if envelope_subnet is None:
                 tree.add_node(subnet)
             else:
-                tree.add_edge(envelope_subnet, subnet)
+                subnet_start = subnet[0]
+                envelop_start = envelope_subnet[0]
+                paths = nx.all_simple_edge_paths(self,envelop_start,subnet_start)
+                keys = tuple(set(k for (_,_,k), *_ in paths))
+                tree.add_edge(envelope_subnet, subnet, keys=keys)
 
         return tree
 
@@ -265,6 +269,8 @@ class Pnet(nx.MultiDiGraph):
 
         fig = plt.figure()
         nx.draw(subnet_tree, ax=fig.add_subplot(111), pos=pos, with_labels=True, node_color=tree_cmap, cmap=cmap, **kwargs)
+        labels = nx.get_edge_attributes(subnet_tree,'keys')
+        nx.draw_networkx_edge_labels(subnet_tree,pos, edge_labels=labels)
 
         if filename is not None:
             plt.savefig(filename, bbox_inches='tight', dpi=dpi, pad_inches=0)
@@ -284,26 +290,47 @@ class Pnet(nx.MultiDiGraph):
         node_list = sorted(list(self.nodes))
         node_cmap = {node: i/len(node_list) for i, node in enumerate(node_list)}
 
-        subnet_tree = self.subnet_tree()
-        heights = {}
-        def calc_heights(node):
-            if node in heights:
-                return heights[node]
+        # subnet_tree = self.subnet_tree()
+        # heights = {}
+        # def calc_heights(node):
+        #     if node in heights:
+        #         return heights[node]
 
-            if self.out_degree(node) == self.in_degree(node) == 1:
-                heights[node] = 1
+        #     if self.out_degree(node) == self.in_degree(node) == 1:
+        #         heights[node] = 1
 
-            if self.out_degree(node) > 1:
-                s_subnet = self.envelope_node(node, 'start')
-                if subnet_tree.out_degree(s_subnet) == 0:
-                    heights[node] = max(heights.get(node, default=1), self.out_degree(node))
+        #     if self.out_degree(node) > 1:
+        #         s_subnet = self.envelope_node(node, 'start')
+        #         end_node = s_subnet[1]
+        #         if subnet_tree.out_degree(s_subnet) == 0:
+        #             heights[node] = max(heights.get(node, default=1), self.out_degree(node))
+        #             heights[end_node] = max(heights.get(end_node, default=1), heights[node])
+        #         else:
+        #             accounted = set()
+        #             this_height = 0
+        #             for _,_,key in self.out_edges(node):
+        #                 next_keys = {data['keys'] for _, subnet, data in subnet_tree.out_edges(s_subnet, data=True) if key in data['keys']}
+        #                 most_keys = max(next_keys, key=len, default=None)
+        #                 if most_keys is None:
+        #                     this_height += 1
+        #                 elif most_keys == tuple():
+        #                     pass
+        #                 elif any(key not in accounted for key in most_keys):
+        #                     for key in most_keys:
+        #                         accounted.add(key)
+        #                     starts = [s for _, (s,e), data in subnet_tree.out_edges(s_subnet, data=True) if data['keys'] ==  most_keys]
+        #                     this_height += max(starts, key=calc_heights)
 
+        #             heights[node] = max(heights.get(node, default=1), this_height)
 
+        #     return heights[node]
 
         def node_visual_height(node):
-            in_height = self.height(end=node)
-            out_height = self.height(start=node)
-            return 2*max(out_height, in_height) - 1
+            if self.out_degree(node) == self.in_degree(node) == 1:
+                return 1
+            in_height = max(self.height(end=node),1)
+            out_height = max(self.height(start=node),1)
+            return 2*out_height*in_height - 1
 
         # get edge length as difference between node and child depth from origin
         def edge_visual_length(node, child):
@@ -334,11 +361,18 @@ class Pnet(nx.MultiDiGraph):
             rect = mpatches.Rectangle(pos, scale_x, height, color=col, ec=ec)
             ax.add_patch(rect)
             label_center(pos[0], pos[1], scale_x, height, str(node))
+
             new_queue=[]
+            prev_arrow_offset = base_arrow_offset
 
             for _, child, key in self.out_edges(node, keys=True):
+                # case of more than 1 edges between 2 nodes
+                if child in new_nodes:
+                    arrow_offset = prev_arrow_offset + 2 * scale_y
+
                 alen = scale_x*edge_visual_length(node, child)
                 apos = (pos[0]+scale_x, pos[1] + arrow_offset)
+                prev_arrow_offset = arrow_offset
                 arrow = mpatches.Arrow(apos[0], apos[1], alen, 0, width=0.05/scale_x, color = 'gray')
                 ax.add_patch(arrow)
                 label_center(apos[0], apos[1], alen, 0, str(key))
