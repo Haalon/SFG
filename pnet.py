@@ -147,13 +147,24 @@ class Pnet(nx.MultiDiGraph):
         self.remove_nodes_from(dead_nodes)
         self.remove_node(start)
 
-    def subnet(self, start=None, end=None):
+    def cut(self, start=None, end=None):
         start = start if start is not None else self.start
         end = end if end is not None else self.end
 
-        sents = self.sents(start, end)
+        desc = nx.descendants(self, start)
+        desc.add(start)
 
-        new_net = Pnet(sents)
+        if end not in desc:
+            return None
+
+        ancs = nx.ancestors(self, end)
+        ancs.add(end)
+        new_net = self.subgraph(desc.intersection(ancs))
+
+        nx.relabel_nodes(new_net, {end: math.inf}, copy=False)
+        new_net.start = start
+        new_net.end = math.inf
+        new_net.next_node_id = end
         return new_net
 
     def in_subnet(self, subnet, node, edge_cases=True):
@@ -202,29 +213,40 @@ class Pnet(nx.MultiDiGraph):
                     return self.envelope_node(path_node, mode='end')
             return (self.start, self.end)
 
-    def envelope_subnet(self, subnet, subnet_list=None, node_mode='inside'):
+    def envelope_subnet(self, subnet, subnets=None, node_mode='inside'):
         if subnet == (self.start, self.end):
             return None
 
-        subnet_list = subnet_list if subnet_list is not None else self.subnet_list()
-        subnet_lens = {(s,e): self.length(s,e) for s,e in subnet_list}        
+        subnets = subnets if subnets is not None else self.subnets()
+        subnet_lens = {(s,e): self.length(s,e) for s,e in subnets}        
         
         s, e = subnet
-        enveloping_subnets = [subnet for subnet in subnet_list if self.in_subnet(subnet, s) and self.in_subnet(subnet, e)]
+        enveloping_subnets = [subnet for subnet in subnets if self.in_subnet(subnet, s) and self.in_subnet(subnet, e)]
         enveloping_subnets.remove((s, e))
 
         return min(enveloping_subnets, default=None, key = lambda subnet: subnet_lens[subnet])
 
-    def subnet_list(self):
-        return [self.envelope_node(node) for node in self.nodes() if self.out_degree(node) > 1 or node == self.start]
+    def subnets(self):
+        res = set()
 
-    def subnet_tree(self, subnet_list=None):
-        subnet_list = subnet_list if subnet_list is not None else self.subnet_list()
+        for node in self.nodes():
+            if self.out_degree(node) > 1 or node == self.start:
+                subnet = self.envelope_node(node, 'start')
+                res.add(subnet)
+
+            if self.in_degree(node) > 1 or node == self.end:
+                subnet = self.envelope_node(node, 'end')
+                res.add(subnet)
+
+        return res                
+
+    def subnet_tree(self, subnets=None):
+        subnets = subnets if subnets is not None else self.subnets()
 
         tree = nx.DiGraph()
 
-        for subnet in subnet_list:
-            envelope_subnet = self.envelope_subnet(subnet, subnet_list=subnet_list)
+        for subnet in subnets:
+            envelope_subnet = self.envelope_subnet(subnet, subnets=subnets)
             
             if envelope_subnet is None:
                 tree.add_node(subnet)
@@ -262,10 +284,21 @@ class Pnet(nx.MultiDiGraph):
         node_list = sorted(list(self.nodes))
         node_cmap = {node: i/len(node_list) for i, node in enumerate(node_list)}
 
-        def label_center(ox, oy, dx, dy, text):
-            centx = (ox + ox + dx) / 2
-            centy = (oy + oy + dy) / 2
-            plt.text(centx, centy, text, size=font_size/scale_x, va='center', ha='center', color=font_color)
+        subnet_tree = self.subnet_tree()
+        heights = {}
+        def calc_heights(node):
+            if node in heights:
+                return heights[node]
+
+            if self.out_degree(node) == self.in_degree(node) == 1:
+                heights[node] = 1
+
+            if self.out_degree(node) > 1:
+                s_subnet = self.envelope_node(node, 'start')
+                if subnet_tree.out_degree(s_subnet) == 0:
+                    heights[node] = max(heights.get(node, default=1), self.out_degree(node))
+
+
 
         def node_visual_height(node):
             in_height = self.height(end=node)
@@ -277,6 +310,11 @@ class Pnet(nx.MultiDiGraph):
             child_depth = self.length(end=child)
             node_depth = self.length(end=node)            
             return 2*(child_depth - node_depth) - 1
+
+        def label_center(ox, oy, dx, dy, text):
+            centx = (ox + ox + dx) / 2
+            centy = (oy + oy + dy) / 2
+            plt.text(centx, centy, text, size=font_size/scale_x, va='center', ha='center', color=font_color)
 
         queue = [(self.start, (0, 0))]
         completed = set()
