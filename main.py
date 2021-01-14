@@ -18,3 +18,10 @@ grammar = CFG.fromstring(GRAMMAR)
 sents = [s for s in generate(grammar, depth=MAX_DEPTH) if len(s) <= MAX_LENGTH]
 
 p = Pnet(sents)
+
+p01 = Pnet(['cd'])
+p02 = Pnet(['ab'])
+p1 = Pnet(['ab', 'cd'])
+p2 = nx.relabel_nodes(p1,{1:2})
+
+

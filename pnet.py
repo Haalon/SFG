@@ -126,12 +126,68 @@ class Pnet(nx.MultiDiGraph):
 
         return False if o_sents.symmetric_difference(s_sents) else True
 
-    def compose(self, other, start=None, end=None, on_collision='error'):
+    def compose(self, other, start=None, end=None):
         start = start if start is not None else self.start
         end = end if end is not None else self.end
 
-        o_sents = other.sents()
-        self.add_sents(o_sents, start, end, on_collision=on_collision)
+        backup = Pnet(self)
+
+        other_to_self = {other.start: start, other.end: end}
+        new_nodes = set()
+
+        paths = nx.all_simple_edge_paths(other, other.start, other.end)
+
+        def merge_nodes(keep_node, merge_node):
+            nx.relabel_nodes(self, {merge_node: keep_node}, copy=False)
+            # relabeling in netwrokx may create new unwanted edges automatically
+            for (s,e,k) in self.out_edges(keep_node, keys=True):
+                if isinstance(key, int):
+                    self.remove_edge(s,e,k)
+            for (s,e,k) in self.in_edges(keep_node, keys=True):
+                if isinstance(key, int):
+                    self.remove_edge(s,e,k)
+
+        for path in paths:
+            for o_s, o_e, key in path:
+                s_s = other_to_self[o_s]
+
+                expected_s_e = other_to_self.get(o_e, None)
+                actual_s_e = self.next_node_by_key(s_s, key)
+                
+                # (other) has node that do not exist in (self) yet
+                if actual_s_e is None:
+                    self.add_node(self.next_node_id)
+                    actual_s_e = self.next_node_id
+                    new_nodes.add(actual_s_e)
+                    self.next_node_id += 1
+
+                # not yet in the dict
+                if expected_s_e is None:
+                    expected_s_e = actual_s_e
+                    other_to_self[o_e] = actual_s_e
+
+                # 2 or more self nodes for 1 other node
+                if expected_s_e != actual_s_e:
+                    if expected_s_e in new_nodes:
+                        merge_nodes(actual_s_e, expected_s_e)
+                        other_to_self[o_e] = actual_s_e
+                    elif actual_s_e in new_nodes:
+                        merge_nodes(expected_s_e, actual_s_e)
+                        other_to_self[o_e] = expected_s_e
+                    else:
+                        self = backup
+                        return False
+
+                s_e = other_to_self[o_e]
+
+                # 2 or more other nodes for 1 self node
+                if len([other_node for other_node,self_node in other_to_self.items() if self_node==s_e]) > 1:
+                    self = backup
+                    return False
+
+                self.add_edge(s_s, s_e, key)
+
+        return True
 
     def collapse(self, start=None, end=None):
         start = start if start is not None else self.start
@@ -289,41 +345,6 @@ class Pnet(nx.MultiDiGraph):
         cmap=plt.get_cmap(cmap)
         node_list = sorted(list(self.nodes))
         node_cmap = {node: i/len(node_list) for i, node in enumerate(node_list)}
-
-        # subnet_tree = self.subnet_tree()
-        # heights = {}
-        # def calc_heights(node):
-        #     if node in heights:
-        #         return heights[node]
-
-        #     if self.out_degree(node) == self.in_degree(node) == 1:
-        #         heights[node] = 1
-
-        #     if self.out_degree(node) > 1:
-        #         s_subnet = self.envelope_node(node, 'start')
-        #         end_node = s_subnet[1]
-        #         if subnet_tree.out_degree(s_subnet) == 0:
-        #             heights[node] = max(heights.get(node, default=1), self.out_degree(node))
-        #             heights[end_node] = max(heights.get(end_node, default=1), heights[node])
-        #         else:
-        #             accounted = set()
-        #             this_height = 0
-        #             for _,_,key in self.out_edges(node):
-        #                 next_keys = {data['keys'] for _, subnet, data in subnet_tree.out_edges(s_subnet, data=True) if key in data['keys']}
-        #                 most_keys = max(next_keys, key=len, default=None)
-        #                 if most_keys is None:
-        #                     this_height += 1
-        #                 elif most_keys == tuple():
-        #                     pass
-        #                 elif any(key not in accounted for key in most_keys):
-        #                     for key in most_keys:
-        #                         accounted.add(key)
-        #                     starts = [s for _, (s,e), data in subnet_tree.out_edges(s_subnet, data=True) if data['keys'] ==  most_keys]
-        #                     this_height += max(starts, key=calc_heights)
-
-        #             heights[node] = max(heights.get(node, default=1), this_height)
-
-        #     return heights[node]
 
         def node_visual_height(node):
             if self.out_degree(node) == self.in_degree(node) == 1:
