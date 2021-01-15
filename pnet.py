@@ -215,7 +215,7 @@ class Pnet(nx.MultiDiGraph):
 
         ancs = nx.ancestors(self, end)
         ancs.add(end)
-        new_net = self.subgraph(desc.intersection(ancs))
+        new_net = self.subgraph(desc.intersection(ancs)).copy()
 
         nx.relabel_nodes(new_net, {end: math.inf}, copy=False)
         new_net.start = start
