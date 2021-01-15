@@ -347,14 +347,16 @@ class Pnet(nx.MultiDiGraph):
         node_cmap = {node: i/len(node_list) for i, node in enumerate(node_list)}
 
         def node_visual_height(node):
+            # currently more than it needs to be
             if self.out_degree(node) == self.in_degree(node) == 1:
                 return 1
+
             in_height = max(self.height(end=node),1)
             out_height = max(self.height(start=node),1)
             return 2*out_height*in_height - 1
 
-        # get edge length as difference between node and child depth from origin
         def edge_visual_length(node, child):
+            # get edge length as difference between node and child depth from origin
             child_depth = self.length(end=child)
             node_depth = self.length(end=node)            
             return 2*(child_depth - node_depth) - 1
@@ -364,13 +366,47 @@ class Pnet(nx.MultiDiGraph):
             centy = (oy + oy + dy) / 2
             plt.text(centx, centy, text, size=font_size/scale_x, va='center', ha='center', color=font_color)
 
+        def depth_to_first_split(start_edge):
+            origin, node,_ = start_edge
+            s_node = node
+
+            if self.in_degree(node) > 1 or node == self.end:
+                return (edge_visual_length(origin, node), node)
+
+            node = next(self.successors(node))
+            # while all paths can be traced back to the starting node
+            while all(nx.has_path(self,s_node, s) and node!=self.end for s,_ in self.in_edges(node)):
+                node = next(self.successors(node))
+
+            return (edge_visual_length(origin, node), node)
+
+        def pop_next_edge(edges_dict, prev_edge):
+            # there are 2 key points here - we wanna handle edges in order of their visual length
+            # but also we need to ensure that edges that belong to same subnet are drawed in one group
+            if prev_edge is None:
+                deepest_edge = max(edges_dict, key=lambda elem: edges_dict[elem][0])
+                edges_dict.pop(deepest_edge)
+                return deepest_edge
+
+            prev_split = depth_to_first_split(prev_edge)[1]
+
+            filtered = [(s,e,k) for s,e,k in edges_dict if nx.has_path(self, e, prev_split)]
+            if not filtered:
+                deepest_edge = max(edges_dict, key=lambda elem: edges_dict[elem][0])
+                edges_dict.pop(deepest_edge)
+                return deepest_edge
+
+            deepest_edge = max(filtered, key=lambda elem: edges_dict[elem][0])
+            edges_dict.pop(deepest_edge)
+            return deepest_edge
+
         queue = [(self.start, (0, 0))]
         completed = set()
 
-        while queue:
-            
+        while queue:            
             new_nodes = set()
             node, pos = queue.pop(0)
+
             if node in completed:
                 continue
 
@@ -384,25 +420,25 @@ class Pnet(nx.MultiDiGraph):
             label_center(pos[0], pos[1], scale_x, height, str(node))
 
             new_queue=[]
+            edges_dict = {edge: depth_to_first_split(edge) for edge in self.out_edges(node, keys=True)}
+            print(edges_dict)
+            prev_edge = None
 
-
-            for _, child, key in self.out_edges(node, keys=True):
-                # case of more than 1 edges between node and child
-                if child in new_nodes:
-                    arrow_offset += 2 * scale_y
-                else:
-                    arrow_offset = child_offset + base_arrow_offset
+            while edges_dict:
+                prev_edge = n, child, key = pop_next_edge(edges_dict, prev_edge)
+                # child in new nodes means that there are more than 1 edge between node and child
+                if child not in new_nodes:
+                    arrow_offset = max(child_offset + base_arrow_offset, arrow_offset) 
 
                 alen = scale_x*edge_visual_length(node, child)
                 apos = (pos[0]+scale_x, pos[1] + arrow_offset)
                 arrow = mpatches.Arrow(apos[0], apos[1], alen, 0, width=0.05/scale_x, color = 'gray')
                 ax.add_patch(arrow)
                 label_center(apos[0], apos[1], alen, 0, str(key))
-                # arrow_offset += 2 * scale_y
+                arrow_offset += 2 * scale_y
 
                 if child not in new_nodes and child not in completed:
                     child_height = scale_y * node_visual_height(child)
-                    # 2 should be replaced with arrow length + scale_x
                     new_nodes.add(child)
                     new_queue.append((child, (pos[0] + alen + scale_x, pos[1] + child_offset)))
                     if edge_visual_length(node, child) == 1:
@@ -411,6 +447,8 @@ class Pnet(nx.MultiDiGraph):
                         child_offset += 2*scale_y
                 elif edge_visual_length(node, child) > 1:
                     child_offset += 2*scale_y
+
+                print(f'{node} - {child}: {child_offset} {arrow_offset}')
 
             completed.add(node)
             # put newest nodes first - thus makin it kinda like depth-first search
