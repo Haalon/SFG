@@ -384,20 +384,33 @@ class Pnet(nx.MultiDiGraph):
             label_center(pos[0], pos[1], scale_x, height, str(node))
 
             new_queue=[]
-            prev_arrow_offset = base_arrow_offset
+
 
             for _, child, key in self.out_edges(node, keys=True):
-                # case of more than 1 edges between 2 nodes
-                if child in new_nodes:
-                    arrow_offset = prev_arrow_offset + 2 * scale_y
+                # case of more than 1 edges between node and child
+                info = ''
+                if child in new_nodes and child in completed:
+                    arrow_offset += 2 * scale_y
+                    info = 'NC'
+                elif child not in new_nodes and child not in completed:
+                    arrow_offset = child_offset + base_arrow_offset
+                    info = '__'
+                elif child in new_nodes:
+                    arrow_offset += 2 * scale_y
+                    info = 'N_'
+                else:
+                    arrow_offset = child_offset + base_arrow_offset
+                    info = '_C'
+
+
+                print(f'{node} - {child}: {child_offset} {info}')
 
                 alen = scale_x*edge_visual_length(node, child)
                 apos = (pos[0]+scale_x, pos[1] + arrow_offset)
-                prev_arrow_offset = arrow_offset
                 arrow = mpatches.Arrow(apos[0], apos[1], alen, 0, width=0.05/scale_x, color = 'gray')
                 ax.add_patch(arrow)
                 label_center(apos[0], apos[1], alen, 0, str(key))
-                arrow_offset += 2 * scale_y
+                # arrow_offset += 2 * scale_y
 
                 if child not in new_nodes and child not in completed:
                     child_height = scale_y * node_visual_height(child)
@@ -406,10 +419,9 @@ class Pnet(nx.MultiDiGraph):
                     new_queue.append((child, (pos[0] + alen + scale_x, pos[1] + child_offset)))
                     if edge_visual_length(node, child) == 1:
                         child_offset += child_height + scale_y
-                        arrow_offset = child_offset + base_arrow_offset
                     else:
                         child_offset += 2*scale_y
-                else:
+                elif child not in new_nodes and child in completed:
                     child_offset += 2*scale_y
 
             completed.add(node)
