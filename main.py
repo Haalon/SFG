@@ -25,3 +25,15 @@ p1 = Pnet(['ab', 'cd'])
 p2 = nx.relabel_nodes(p1,{1:2})
 
 
+
+p.add_sent('E',9,11)
+p.add_sent('I',0,8)
+p.add_sent('i',0,1)
+p.add_sent('I',9)
+p.add_sent('qq')
+p.add_sent('qq',5)
+
+pcut = p.cut(9)
+
+# leads to visual bug
+p.compose(pcut, 5)

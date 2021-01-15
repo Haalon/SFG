@@ -388,22 +388,10 @@ class Pnet(nx.MultiDiGraph):
 
             for _, child, key in self.out_edges(node, keys=True):
                 # case of more than 1 edges between node and child
-                info = ''
-                if child in new_nodes and child in completed:
+                if child in new_nodes:
                     arrow_offset += 2 * scale_y
-                    info = 'NC'
-                elif child not in new_nodes and child not in completed:
-                    arrow_offset = child_offset + base_arrow_offset
-                    info = '__'
-                elif child in new_nodes:
-                    arrow_offset += 2 * scale_y
-                    info = 'N_'
                 else:
                     arrow_offset = child_offset + base_arrow_offset
-                    info = '_C'
-
-
-                print(f'{node} - {child}: {child_offset} {info}')
 
                 alen = scale_x*edge_visual_length(node, child)
                 apos = (pos[0]+scale_x, pos[1] + arrow_offset)
@@ -421,7 +409,7 @@ class Pnet(nx.MultiDiGraph):
                         child_offset += child_height + scale_y
                     else:
                         child_offset += 2*scale_y
-                elif child not in new_nodes and child in completed:
+                elif edge_visual_length(node, child) > 1:
                     child_offset += 2*scale_y
 
             completed.add(node)
