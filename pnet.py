@@ -98,11 +98,6 @@ class Pnet(nx.MultiDiGraph):
     def terminals(self):
         return set(nx.get_edge_attributes(self,'label').values())
 
-    def height(self, start=None, end=None):
-        start = start if start is not None else self.start
-        end = end if end is not None else self.end
-        return len(list(nx.all_simple_edge_paths(self, start, end)))
-
     def length(self, start=None, end=None):
         start = start if start is not None else self.start
         end = end if end is not None else self.end
@@ -118,13 +113,39 @@ class Pnet(nx.MultiDiGraph):
             sent = '' if concat else []
             for _,_, word in path:
                 sent += word
-            yield tuple(sent)        
+            yield tuple(sent)
 
     def likelihood(self, other, t=None):
         o_sents = set(other.sents(cutoff=t, concat=False))
         s_sents = set(self.sents(cutoff=t, concat=False))
 
         return False if o_sents.symmetric_difference(s_sents) else True
+
+    def _merge_nodes(self, keep_node, merge_nodes):
+            nx.relabel_nodes(self, {m_node: keep_node for m_node in merge_nodes}, copy=False)
+            # relabeling in netwrokx may create new unwanted edges automatically
+            for (s,e,k) in self.out_edges(keep_node, keys=True):
+                if isinstance(k, int):
+                    self.remove_edge(s,e,k)
+            for (s,e,k) in self.in_edges(keep_node, keys=True):
+                if isinstance(k, int):
+                    self.remove_edge(s,e,k)
+
+    def factorize(self, subnet_or_node):
+        if isinstance(subnet_or_node, int):
+            e = subnet_or_node
+        else:
+            _,e = subnet_or_node
+
+        if self.in_degree(e) < 2:
+            return False
+
+        prev,_,key = next(self.in_edges(e, keys=True))
+
+        if all(k==key and self.is_transit_node(s) for s,_,k in self.in_edges(e, keys=True)):
+            self._merge_nodes(prev, self.predecessors(e))
+
+        return self.factorize(prev) or True
 
     def compose(self, other, start=None, end=None):
         start = start if start is not None else self.start
@@ -136,16 +157,6 @@ class Pnet(nx.MultiDiGraph):
         new_nodes = set()
 
         paths = nx.all_simple_edge_paths(other, other.start, other.end)
-
-        def merge_nodes(keep_node, merge_node):
-            nx.relabel_nodes(self, {merge_node: keep_node}, copy=False)
-            # relabeling in netwrokx may create new unwanted edges automatically
-            for (s,e,k) in self.out_edges(keep_node, keys=True):
-                if isinstance(key, int):
-                    self.remove_edge(s,e,k)
-            for (s,e,k) in self.in_edges(keep_node, keys=True):
-                if isinstance(key, int):
-                    self.remove_edge(s,e,k)
 
         for path in paths:
             for o_s, o_e, key in path:
@@ -169,10 +180,10 @@ class Pnet(nx.MultiDiGraph):
                 # 2 or more self nodes for 1 other node
                 if expected_s_e != actual_s_e:
                     if expected_s_e in new_nodes:
-                        merge_nodes(actual_s_e, expected_s_e)
+                        self._merge_nodes(actual_s_e, [expected_s_e])
                         other_to_self[o_e] = actual_s_e
                     elif actual_s_e in new_nodes:
-                        merge_nodes(expected_s_e, actual_s_e)
+                        self._merge_nodes(expected_s_e, [actual_s_e])
                         other_to_self[o_e] = expected_s_e
                     else:
                         self = backup
@@ -302,15 +313,23 @@ class Pnet(nx.MultiDiGraph):
         tree = nx.DiGraph()
 
         for subnet in subnets:
+            subnet_start, subnet_end = subnet
             envelope_subnet = self.envelope_subnet(subnet, subnets=subnets)
+
+            inner_paths = nx.all_simple_edge_paths(self, subnet_start, subnet_end)
+            inner_keys = tuple(set(k for (_,_,k), *_ in inner_paths))
             
             if envelope_subnet is None:
-                tree.add_node(subnet)
-            else:
-                subnet_start = subnet[0]
+                tree.add_node(subnet, inner=inner_keys)
+            else:                
                 envelop_start = envelope_subnet[0]
-                paths = nx.all_simple_edge_paths(self,envelop_start,subnet_start)
-                keys = tuple(set(k for (_,_,k), *_ in paths))
+                
+                if subnet_start == envelop_start:
+                    paths = nx.all_simple_edge_paths(self, envelop_start, subnet_end)
+                else:
+                    paths = nx.all_simple_edge_paths(self, envelop_start, subnet_start)
+                keys = tuple(set(k for (_,_,k), *_ in paths))                
+                tree.add_node(subnet, inner=inner_keys)
                 tree.add_edge(envelope_subnet, subnet, keys=keys)
 
         return tree
@@ -319,12 +338,8 @@ class Pnet(nx.MultiDiGraph):
         subnet_tree = subnet_tree if subnet_tree is not None else self.subnet_tree()
         pos = hierarchy_pos(subnet_tree,(self.start, self.end))
 
-        node_list = sorted(list(self.nodes))
-        node_cmap = [i/len(node_list) for i, _ in enumerate(node_list)]
-        tree_cmap = [col for i, col in enumerate(node_cmap) if self.out_degree(node_list[i]) > 1 or node_list[i] == self.start]
-
         fig = plt.figure()
-        nx.draw(subnet_tree, ax=fig.add_subplot(111), pos=pos, with_labels=True, node_color=tree_cmap, cmap=cmap, **kwargs)
+        nx.draw(subnet_tree, ax=fig.add_subplot(111), pos=pos, with_labels=True, cmap=cmap, **kwargs)
         labels = nx.get_edge_attributes(subnet_tree,'keys')
         nx.draw_networkx_edge_labels(subnet_tree,pos, edge_labels=labels)
 
@@ -336,24 +351,40 @@ class Pnet(nx.MultiDiGraph):
 
     def draw(self, scale_x=None, font_size=32, font_color='black', cmap='viridis', filename=None, dpi=960, show=True):
         fig, ax = plt.subplots(1)
-
-        origin = (0,0)
-        scale_x = scale_x if scale_x is not None else self.height() / self.length()
-        scale_y = 1       
-        base_arrow_offset = 0.5 * scale_y
-
         cmap=plt.get_cmap(cmap)
         node_list = sorted(list(self.nodes))
         node_cmap = {node: i/len(node_list) for i, node in enumerate(node_list)}
 
-        def node_visual_height(node):
-            # currently more than it needs to be
-            if self.out_degree(node) == self.in_degree(node) == 1:
-                return 1
+        subnet_tree = self.subnet_tree()
+        subnet_heights = {}
 
-            in_height = max(self.height(end=node),1)
-            out_height = max(self.height(start=node),1)
-            return 2*out_height*in_height - 1
+        def calc_height(subnet):
+            inner_keys = set(subnet_tree.nodes[subnet]['inner'])
+
+            if subnet_tree.out_degree(subnet) == 0:
+                subnet_heights[subnet] = max(len(inner_keys), subnet_heights.get(subnet,1))
+                return subnet_heights[subnet]
+            
+            key_dict = {child_subnet: data['keys'] for _,child_subnet,data in subnet_tree.out_edges(subnet, data=True)}            
+            height_dict = {child_subnet: calc_height(child_subnet) for child_subnet in key_dict}
+
+            key_height = {}
+            keys_to_children = set()
+            for child_subnet, keys in key_dict.items():
+                keys_to_children.update(keys)
+                key_height[keys] = max(height_dict[child_subnet], key_height.get(keys, 1))
+
+            height = sum(key_height.values())
+            for key in inner_keys:
+                if key not in keys_to_children:
+                    height += 1
+
+            subnet_heights[subnet] = max(height, subnet_heights.get(subnet,1))
+            return height
+
+        def node_visual_height(node):
+            filtered_subnets = {(s,e): h for (s,e), h in subnet_heights.items() if e==node or s==node}
+            return 2*max(filtered_subnets.values(), default=1) - 1
 
         def edge_visual_length(node, child):
             # get edge length as difference between node and child depth from origin
@@ -367,7 +398,7 @@ class Pnet(nx.MultiDiGraph):
             plt.text(centx, centy, text, size=font_size/scale_x, va='center', ha='center', color=font_color)
 
         def depth_to_first_split(start_edge):
-            origin, node,_ = start_edge
+            origin, node, _ = start_edge
             s_node = node
 
             if self.in_degree(node) > 1 or node == self.end:
@@ -388,7 +419,7 @@ class Pnet(nx.MultiDiGraph):
                 edges_dict.pop(deepest_edge)
                 return deepest_edge
 
-            prev_split = depth_to_first_split(prev_edge)[1]
+            _, prev_split = depth_to_first_split(prev_edge)
 
             filtered = [(s,e,k) for s,e,k in edges_dict if nx.has_path(self, e, prev_split)]
             if not filtered:
@@ -400,6 +431,11 @@ class Pnet(nx.MultiDiGraph):
             edges_dict.pop(deepest_edge)
             return deepest_edge
 
+        calc_height((self.start, self.end))
+        origin = (0,0)
+        scale_x = scale_x if scale_x is not None else subnet_heights[(self.start, self.end)] / self.length()
+        scale_y = 1       
+        base_arrow_offset = 0.5 * scale_y
         queue = [(self.start, (0, 0))]
         completed = set()
 
@@ -421,7 +457,6 @@ class Pnet(nx.MultiDiGraph):
 
             new_queue=[]
             edges_dict = {edge: depth_to_first_split(edge) for edge in self.out_edges(node, keys=True)}
-            print(edges_dict)
             prev_edge = None
 
             while edges_dict:
@@ -448,7 +483,7 @@ class Pnet(nx.MultiDiGraph):
                 elif edge_visual_length(node, child) > 1:
                     child_offset += 2*scale_y
 
-                print(f'{node} - {child}: {child_offset} {arrow_offset}')
+                
 
             completed.add(node)
             # put newest nodes first - thus makin it kinda like depth-first search
