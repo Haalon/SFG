@@ -4,12 +4,13 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import logging
 
-from utils import hierarchy_pos
+from utils import hierarchy_pos, merge_nodes_and_keys
 
 class Pnet(nx.MultiDiGraph):
     """Pnet - a hybrid between Parallel-series network and prefix tree
 
-    A parallel-series network can be defined inductively: 
+    A parallel-series network can be defined inductively:
+
     * A network consisting of a single contact joining terminals is a parallel-series network
     * A network constructed from two parallel-series networks joined in parallel or in series is a parallel-series network.
 
@@ -20,8 +21,6 @@ class Pnet(nx.MultiDiGraph):
     * Any paths between 2 nodes correspond to unique chain of symbols,
       made by concatination of edge labels of that path in order
     * For all nodes there can't be more than 1 outgoing edges marked with the same symbol
-
-    This class is built around networkx' MultiDiGraph class
 
     Attributes
     ----------
@@ -288,16 +287,6 @@ class Pnet(nx.MultiDiGraph):
 
         return False if o_sents.symmetric_difference(s_sents) else True
 
-    def _merge_nodes(self, keep_node, merge_nodes):
-            nx.relabel_nodes(self, {m_node: keep_node for m_node in merge_nodes}, copy=False)
-            # relabeling in netwrokx may create new unwanted edges automatically
-            for (s,e,k) in self.out_edges(keep_node, keys=True):
-                if isinstance(k, int):
-                    self.remove_edge(s,e,k)
-            for (s,e,k) in self.in_edges(keep_node, keys=True):
-                if isinstance(k, int):
-                    self.remove_edge(s,e,k)
-
     def factorize(self, subnet_or_node):
         """Right factorize subnet or node
 
@@ -328,7 +317,7 @@ class Pnet(nx.MultiDiGraph):
         prev,_,key = next(self.in_edges(e, keys=True))
 
         if all(k==key and self.is_transit_node(s) for s,_,k in self.in_edges(e, keys=True)):
-            self._merge_nodes(prev, self.predecessors(e))
+            merge_nodes_and_keys(self, prev, self.predecessors(e))
 
         return self.factorize(prev) or True
 
@@ -389,10 +378,10 @@ class Pnet(nx.MultiDiGraph):
                 # 2 or more self nodes for 1 other node
                 if expected_s_e != actual_s_e:
                     if expected_s_e in new_nodes:
-                        self._merge_nodes(actual_s_e, [expected_s_e])
+                        merge_nodes_and_keys(self, actual_s_e, [expected_s_e])
                         other_to_self[o_e] = actual_s_e
                     elif actual_s_e in new_nodes:
-                        self._merge_nodes(expected_s_e, [actual_s_e])
+                        merge_nodes_and_keys(self, expected_s_e, [actual_s_e])
                         other_to_self[o_e] = expected_s_e
                     else:
                         self = backup
@@ -428,7 +417,7 @@ class Pnet(nx.MultiDiGraph):
         Creates a new Pnet, that contains all nodes and edges
         between ``start`` and ``end`` nodes in a current one
 
-        There needs to be a path ``start`` and ``end``
+        There needs to be a path between ``start`` and ``end``
 
         Parameters
         ----------

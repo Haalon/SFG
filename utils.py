@@ -1,33 +1,70 @@
 import networkx as nx
 import random
 
-def hierarchy_pos(G, root=None, width=1., vert_gap = 0.2, vert_loc = 0, xcenter = 0.5):
 
-    '''
+def merge_nodes_and_keys(G, keep_node, merge_nodes):
+    """Merges nodes into one, while also merging edges with same key
+
+    Parameters
+    ----------    
+    G : networkx.MultiDigraph
+        the graph
+    keep_node : graph node
+        node that all others will be merged into
+    merge_nodes : list of graph nodes
+        nodes to merge
+    """
+    out_keys = {key for node in merge_nodes for _,_,key in G.out_edges(node,keys=True)}
+    in_keys = {key for node in merge_nodes for _,_,key in G.in_edges(node,keys=True)}
+
+    out_keys.update(k for _,_,k in G.out_edges(keep_node,keys=True))
+    in_keys.update(k for _,_,k in G.in_edges(keep_node,keys=True))
+
+    nx.relabel_nodes(G, {m_node: keep_node for m_node in merge_nodes}, copy=False)
+
+    # relabeling in netwrokx may create new unwanted edges automatically
+    for (s,e,k) in list(G.out_edges(keep_node, keys=True)):
+        if k not in out_keys:
+            G.remove_edge(s,e,k)
+
+    for (s,e,k) in list(G.in_edges(keep_node, keys=True)):
+        if k not in in_keys:
+            G.remove_edge(s,e,k)
+
+
+def hierarchy_pos(G, root=None, width=1., vert_gap = 0.2, vert_loc = 0, xcenter = 0.5):
+    """If the graph is a tree this will return the positions to plot this in a hierarchical layout
+
     From Joel's answer at https://stackoverflow.com/a/29597209/2966723.  
-    Licensed under Creative Commons Attribution-Share Alike 
+    Licensed under Creative Commons Attribution-Share Alike     
+     
+    Parameters
+    ----------    
+    G : networkx.Digraph
+        the graph (must be a tree)
     
-    If the graph is a tree this will return the positions to plot this in a 
-    hierarchical layout.
+    root
+        the root node of current branch
+
+        * if the tree is directed and this is not given, 
+          the root will be found and used
+        * if the tree is directed and this is given, then 
+          the positions will be just for the descendants of this node.
+        * if the tree is undirected and not given, 
+          then a random choice will be used.
     
-    G: the graph (must be a tree)
+    width : float, default 1
+        horizontal space allocated for this branch - avoids overlap with other branches
     
-    root: the root node of current branch 
-    - if the tree is directed and this is not given, 
-      the root will be found and used
-    - if the tree is directed and this is given, then 
-      the positions will be just for the descendants of this node.
-    - if the tree is undirected and not given, 
-      then a random choice will be used.
+    vert_gap : float, default 0.2
+        gap between levels of hierarchy
     
-    width: horizontal space allocated for this branch - avoids overlap with other branches
+    vert_loc: float, default 0
+        vertical location of root
     
-    vert_gap: gap between levels of hierarchy
-    
-    vert_loc: vertical location of root
-    
-    xcenter: horizontal location of root
-    '''
+    xcenter: float, default 0.5
+        horizontal location of root
+    """
     if not nx.is_tree(G):
         raise TypeError('cannot use hierarchy_pos on a graph that is not a tree')
 
@@ -37,15 +74,7 @@ def hierarchy_pos(G, root=None, width=1., vert_gap = 0.2, vert_loc = 0, xcenter 
         else:
             root = random.choice(list(G.nodes))
 
-    def _hierarchy_pos(G, root, width=1., vert_gap = 0.2, vert_loc = 0, xcenter = 0.5, pos = None, parent = None):
-        '''
-        see hierarchy_pos docstring for most arguments
-
-        pos: a dict saying where all nodes go if they have been assigned
-        parent: parent of this branch. - only affects it if non-directed
-
-        '''
-    
+    def _hierarchy_pos(G, root, width=1., vert_gap = 0.2, vert_loc = 0, xcenter = 0.5, pos = None, parent = None):    
         if pos is None:
             pos = {root:(xcenter,vert_loc)}
         else:
