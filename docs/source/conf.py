@@ -54,6 +54,9 @@ html_theme = 'sphinx_rtd_theme'
 html_static_path = ['_static']
 
 
+# Makes 'Returns' and 'Return type' to be on the same line
+napoleon_use_rtype = False
+
 autodoc_member_order = 'bysource'
 
 # -- Options for LaTeX output ---------------------------------------------
