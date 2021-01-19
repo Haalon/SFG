@@ -192,7 +192,11 @@ class Pnet(nx.MultiDiGraph):
         Returns
         -------
         node : int or None
-            returns desired node index OR None if no such node exists
+            returns desired node index 
+
+            OR
+
+            None if no such node exists
 
         """
         if origin not in self:
@@ -331,6 +335,79 @@ class Pnet(nx.MultiDiGraph):
         self._remove_node_if_dead(s)
         self._remove_node_if_dead(e)
 
+    def in_between(self, node, start=None, end=None, edge_cases=True):
+        """Check if node is between two others
+
+        Node *B* is between nodes *A* and *C*
+        if there is path from *A* to *B*
+        and from *B* to *C* 
+
+        Parameters
+        ----------
+        node : int
+            node to check
+        start : int, default self.start
+            starting node            
+        end : int, default self.end
+            end node
+        edge_cases : bool, default True
+            if False, start or end nodes are considered 
+            to be NOT in between each other
+
+        Returns
+        -------
+        bool
+
+        See Also
+        --------
+        between_nodes
+        """
+        start = start if start is not None else self.start
+        end = end if end is not None else self.end
+
+        if not edge_cases and (start == node or end == node):
+            return False
+
+        return nx.has_path(self, start, node) and nx.has_path(self, node, end)
+
+    def between_nodes(self, start=None, end=None, edge_cases=True):
+        """Get all nodes thar are between two given nodes
+
+        Node *B* is between nodes *A* and *C*
+        if there is path from *A* to *B*
+        and from *B* to *C* 
+
+        Parameters
+        ----------
+        start : int, default self.start
+            starting node            
+        end : int, default self.end
+            end node
+        edge_cases : bool, default True
+            if False, start or end nodes are considered 
+            to be NOT in between each other
+
+        Returns
+        -------
+        nodes : set of int
+            nodes that are between ``start`` and ``end``
+
+        See Also
+        --------
+        in_between
+        """
+        start = start if start is not None else self.start
+        end = end if end is not None else self.end
+
+        paths = nx.all_simple_paths(self, start, end)
+        nodes = {node for path in paths for node in path}
+
+        if not edge_cases:
+            nodes.remove(start)
+            nodes.remove(end)
+
+        return nodes
+
     def similarity(self, other, t=None):
         """Check similarity of two Pnets
 
@@ -359,13 +436,12 @@ class Pnet(nx.MultiDiGraph):
 
         Merge ancestors of given node (or subnet's end node),
         if they all have single path to a given node,
-        and this paths correspond to the same sentence
+        and these paths correspond to the same sentence
 
         Parameters
         ----------
         subnet_or_node : (int, int) or int
-            maximum length (in the number of keys) of sentences to check,
-            unlimited if equals to None
+            subnet or node to factorize
 
         Returns
         -------
@@ -390,11 +466,16 @@ class Pnet(nx.MultiDiGraph):
 
     def compose(self, other, start=None, end=None):
         """Compose two Pnets
+        
+        Creates new Pnet, that has edges and nodes from both nets
 
-        Add edges and nodes from other Pnet, that do not exist in a current one,
-        while preserving ones that exist in current or in both Pnets
+        May fail due to collisions, in which case ``None`` is returned
 
-        May fail due to collisions, in which case current Pnet is left unchanged
+        Note
+        ----
+
+        ``add_sents(other.sents())`` may be used as a faster composition alternative,
+        but it does not keep the structure of other net
 
         Parameters
         ----------
@@ -402,21 +483,24 @@ class Pnet(nx.MultiDiGraph):
             other Pnet to compose with
         start : int, default self.start
             node to start composition from,
-            it will correspond to start node in the other Pnet
+            it will correspond to Start node in the other Pnet
         end : int, default self.end
             node where the composition ends
-            it will correspond to end node in the other Pnet
+            it will correspond to End node in the other Pnet
 
         Returns
         -------
-        success : bool
-            True if compose was sucessful
-            False if it cannot be done
+        net : Pnet or None
+            new, composed Pnet
+            
+            OR
+
+            None if composition cannot be done
         """
         start = start if start is not None else self.start
         end = end if end is not None else self.end
 
-        backup = Pnet(self)
+        net = Pnet(self)
 
         other_to_self = {other.start: start, other.end: end}
         new_nodes = set()
@@ -428,14 +512,14 @@ class Pnet(nx.MultiDiGraph):
                 s_s = other_to_self[o_s]
 
                 expected_s_e = other_to_self.get(o_e, None)
-                actual_s_e = self.next_node_by_key(s_s, key)
+                actual_s_e = net.next_node_by_key(s_s, key)
                 
                 # (other) has node that do not exist in (self) yet
                 if actual_s_e is None:
-                    self.add_node(self.next_node_id)
-                    actual_s_e = self.next_node_id
+                    net.add_node(net.next_node_id)
+                    actual_s_e = net.next_node_id
                     new_nodes.add(actual_s_e)
-                    self.next_node_id += 1
+                    net.next_node_id += 1
 
                 # not yet in the dict
                 if expected_s_e is None:
@@ -445,44 +529,57 @@ class Pnet(nx.MultiDiGraph):
                 # 2 or more self nodes for 1 other node
                 if expected_s_e != actual_s_e:
                     if expected_s_e in new_nodes:
-                        merge_nodes_and_keys(self, actual_s_e, [expected_s_e])
+                        merge_nodes_and_keys(net, actual_s_e, [expected_s_e])
                         other_to_self[o_e] = actual_s_e
                     elif actual_s_e in new_nodes:
-                        merge_nodes_and_keys(self, expected_s_e, [actual_s_e])
+                        merge_nodes_and_keys(net, expected_s_e, [actual_s_e])
                         other_to_self[o_e] = expected_s_e
                     else:
-                        self = backup
-                        return False
+                        return None
 
                 s_e = other_to_self[o_e]
 
                 # 2 or more other nodes for 1 self node
                 if len([other_node for other_node,self_node in other_to_self.items() if self_node==s_e]) > 1:
-                    self = backup
-                    return False
+                    return None
 
-                self.add_edge(s_s, s_e, key)
+                net.add_edge(s_s, s_e, key)
 
-        return True
+        return net
 
     def collapse(self, start=None, end=None):
+        """Merge start and end nodes, and remove everything between them
+
+        There must be a path between start and end node
+
+        Parameters
+        ----------
+        start : int, default self.start
+            starting node            
+        end : int, default self.end
+            end node
+
+        See Also
+        --------
+        between_nodes
+        """
         start = start if start is not None else self.start
         end = end if end is not None else self.end
 
-        dead_nodes = [node for node in self if self.in_subnet((start, end), node, edge_cases=False)]
-
-        for s,e,k in list(self.in_edges(start, keys=True)):
-            self.remove_edge(s,e,k)
-            self.add_edge(s, end, k)
-
+        dead_nodes = self.between_nodes(  start, end, edge_cases=False)
         self.remove_nodes_from(dead_nodes)
-        self.remove_node(start)
 
-    def cut(self, start=None, end=None):
+        merge_nodes_and_keys(self, end, [start])
+
+        while self.has_edge(end, end):
+            self.remove_edge(end, end)
+        
+
+    def subcopy(self, start=None, end=None):
         """Make a new Pnet from part of a current one
 
         Creates a new Pnet, that contains all nodes and edges
-        between ``start`` and ``end`` nodes in a current one
+        between ``start`` and ``end`` nodes
 
         There needs to be a path between ``start`` and ``end``
 
@@ -498,21 +595,21 @@ class Pnet(nx.MultiDiGraph):
         Returns
         -------
         new_net : Pnet or None
+            Resulting Pnet
+
+            OR
+
             None if there is no path between ``start`` and ``end``,
-            Resulting Pnet otherwise
+            
         """
         start = start if start is not None else self.start
         end = end if end is not None else self.end
 
-        desc = nx.descendants(self, start)
-        desc.add(start)
-
-        if end not in desc:
+        if not nx.has_path(self, start, end):
             return None
 
-        ancs = nx.ancestors(self, end)
-        ancs.add(end)
-        new_net = self.subgraph(desc.intersection(ancs)).copy()
+        subnodes = self.between_nodes(start, end)
+        new_net = self.subgraph(subnodes).copy()
 
         nx.relabel_nodes(new_net, {end: Pnet._end}, copy=False)
         new_net.start = start
@@ -520,35 +617,8 @@ class Pnet(nx.MultiDiGraph):
         new_net.next_node_id = end
         return new_net
 
-    def in_subnet(self, subnet, node, edge_cases=True):
-        """Check if subnet contains node
-
-        Parameters
-        ----------
-        subnet : (int, int)
-            subnet to check
-        node : int
-            node to check
-        edge_cases : bool, default True
-            if True, start or end node of subnet
-            is considered to be inside this subnet
-
-        Returns
-        -------
-        bool
-        """
-        s_start, s_end = subnet
-
-        if edge_cases and (s_start == node or s_end == node):
-            return True
-
-        desc = nx.descendants(self, s_start)
-        ancs = nx.ancestors(self, s_end)
-
-        return node in desc and node in ancs
-
     def envelope_node(self, node, mode='start'):
-        """Get the first subnet that contains node
+        """Get the first subnet that contains ``node``
 
         Parameters
         ----------
@@ -564,7 +634,9 @@ class Pnet(nx.MultiDiGraph):
         subnet : (int,int) or None
             The subnet as a tuple of its start and end nodes
 
-            OR None if no such subnet can be found
+            OR 
+
+            None if no such subnet can be found
         """
         if mode == 'start':
             if node == self.start:
@@ -601,7 +673,7 @@ class Pnet(nx.MultiDiGraph):
             return (self.start, self.end)
 
     def envelope_subnet(self, subnet, subnets=None):
-        """Get a first subnet that fully contains given subnet
+        """Get a first subnet that fully contains given ``subnet``
 
         Parameters
         ----------
@@ -616,7 +688,9 @@ class Pnet(nx.MultiDiGraph):
         subnet : (int,int) or None
             The subnet as a tuple of its start and end nodes
 
-            OR None if no such subnet can be found
+            OR 
+
+            None if no such subnet can be found
 
         See Also
         --------
@@ -629,7 +703,7 @@ class Pnet(nx.MultiDiGraph):
         subnet_lens = {(s,e): self.length(s,e) for s,e in subnets}        
         
         s, e = subnet
-        enveloping_subnets = [subnet for subnet in subnets if self.in_subnet(subnet, s) and self.in_subnet(subnet, e)]
+        enveloping_subnets = [(this_s, this_e) for (this_s, this_e) in subnets if self.in_between(s, this_s, this_e) and self.in_between(e, this_s, this_e)]
         enveloping_subnets.remove((s, e))
 
         return min(enveloping_subnets, default=None, key=lambda subnet: subnet_lens[subnet])

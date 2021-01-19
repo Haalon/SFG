@@ -33,7 +33,7 @@ p.add_sent('I',9)
 p.add_sent('qq')
 p.add_sent('qq',5)
 
-pcut = p.cut(9)
+pcut = p.subcopy(9)
 
 # leads to visual bug
-p.compose(pcut, 5)
+pp = p.compose(pcut, 5)
