@@ -264,6 +264,73 @@ class Pnet(nx.MultiDiGraph):
                 sent += word
             yield sent
 
+    def _remove_node_if_dead(self, node):
+        if self.out_degree(node) == 0 and node != self.end:
+            self.remove_node_recursive(node)
+            return
+
+        if self.in_degree(node) == 0 and node != self.start:
+            self.remove_node_recursive(node)
+            return
+
+    def remove_node_recursive(self, node):
+        """Remove node and all resulting dangling nodes
+
+        If after the node removal, any (except End and Start nodes) 
+        node will have 0 incoming or outgoing edges, it will also be removed
+
+        Unlike ``Multigraph.remove_node``, ensures that Pnet stays valid
+
+        Parameters
+        ----------
+        node : int
+            node to remove
+
+        See Also
+        --------
+        remove_edge_recursive
+        """
+        if node == self.start or node == self.end:
+            return
+
+        succ = list(self.successors(node))
+        pred = list(self.predecessors(node))
+        self.remove_node(node)
+        
+        for node in succ:
+            self._remove_node_if_dead(node)
+
+        for node in pred:
+            self._remove_node_if_dead(node)
+
+    def remove_edge_recursive(self, edge):
+        """Remove edge and all resulting dangling nodes
+
+        If after the edge removal, any (except End and Start nodes) 
+        node will have 0 incoming or outgoing edges, it will also be removed
+
+        Unlike ``Multigraph.remove_node``, ensures that Pnet stays valid
+
+        Parameters
+        ----------
+        edge : (int, int, str)
+            edge to remove as a tuple of
+
+            * start edge
+            * end edge
+            * key (edge label)
+
+        See Also
+        --------
+        remove_node_recursive
+        """
+        s,e, _ = edge
+
+        self.remove_edge(edge)
+
+        self._remove_node_if_dead(s)
+        self._remove_node_if_dead(e)
+
     def similarity(self, other, t=None):
         """Check similarity of two Pnets
 
