@@ -728,7 +728,8 @@ class Pnet(nx.MultiDiGraph):
         
         s, e = subnet
         enveloping_subnets = [(this_s, this_e) for (this_s, this_e) in subnets if self.in_between(s, this_s, this_e) and self.in_between(e, this_s, this_e)]
-        enveloping_subnets.remove((s, e))
+        if (s, e) in enveloping_subnets:
+            enveloping_subnets.remove((s, e))
 
         return min(enveloping_subnets, default=None, key=lambda subnet: subnet_lens[subnet])
 
@@ -897,7 +898,7 @@ class Pnet(nx.MultiDiGraph):
         subnet_heights = {}
 
         def calc_height(subnet):
-            # also recursevly fills subnet_heights with heights
+            # recursevly fills subnet_heights with heights
             inner_keys = set(subnet_tree.nodes[subnet]['inner'])
 
             if subnet_tree.out_degree(subnet) == 0:
@@ -921,7 +922,16 @@ class Pnet(nx.MultiDiGraph):
             subnet_heights[subnet] = max(height, subnet_heights.get(subnet,1))
             return height
 
+        calc_height((self.start, self.end))
+        origin = (0,0)
+        scale_x = scale_x if scale_x is not None else subnet_heights[(self.start, self.end)] / self.length()
+        scale_y = 1       
+        base_arrow_offset = 0.5 * scale_y
+        queue = [(self.start, (0, 0))]
+        completed = set()
+
         def node_visual_height(node):
+            # node height is a max height of a subnet that starts or ends with this node
             filtered_subnets = {(s,e): h for (s,e), h in subnet_heights.items() if e==node or s==node}
             return 2*max(filtered_subnets.values(), default=1) - 1
 
@@ -936,48 +946,67 @@ class Pnet(nx.MultiDiGraph):
             centy = (oy + oy + dy) / 2
             plt.text(centx, centy, text, size=font_size/scale_x, va='center', ha='center', color=font_color)
 
-        def depth_to_first_split(start_edge):
-            origin, node, _ = start_edge
-            s_node = node
+        def edge_generator(node, subnet=None, arrow_offset=None):
+            # iterates over edges in a subnet order
+            # also calculates edge's length and offset
+            arrow_offset = arrow_offset if arrow_offset is not None else base_arrow_offset
+            if node == self.end:
+                return
 
-            if self.in_degree(node) > 1 or node == self.end:
-                return (edge_visual_length(origin, node), node)
+            if self.out_degree(node) == 1 and subnet is None:
+                edge = s, e, k = next(iter(self.out_edges(node, keys=True)))
+                edge_len = scale_x*edge_visual_length(s, e)
+                yield (arrow_offset, edge_len, edge)
+                return
+            
+            subnet = subnet if subnet is not None else self.envelope_node(node, mode='start')
+            child_nets = [sub for sub in subnet_tree.out_edges(subnet)]
 
-            node = next(self.successors(node))
-            # while all paths can be traced back to the starting node
-            while all(nx.has_path(self,s_node, s) and node!=self.end for s,_ in self.in_edges(node)):
-                node = next(self.successors(node))
+            inner_keys = set(subnet_tree.nodes[subnet]['inner'])
+            key_dict = {child_subnet: data['keys'] for _,child_subnet,data in subnet_tree.out_edges(subnet, data=True)}
 
-            return (edge_visual_length(origin, node), node)
+            # if there is a chain of subnets, here will be the first ones of such chains
+            first_subnets = {}
+            keys_to_children = set()
+            key_height = {}
 
-        def pop_next_edge(edges_dict, prev_edge):
-            # there are 2 key points here - we wanna handle edges in order of their visual length
-            # but also we need to ensure that edges that belong to same subnet are drawed in one group
-            if prev_edge is None:
-                deepest_edge = max(edges_dict, key=lambda elem: edges_dict[elem][0])
-                edges_dict.pop(deepest_edge)
-                return deepest_edge
+            for child_subnet, keys in key_dict.items():
+                key_height[keys] = max(subnet_heights[child_subnet], key_height.get(keys, 1))
+                keys_to_children.update(keys)
 
-            _, prev_split = depth_to_first_split(prev_edge)
+                if keys not in first_subnets:
+                    first_subnets[keys] = child_subnet
+                else:
+                    old_start, _ = first_subnets[keys]
+                    _, new_end = child_subnet
+                    if nx.has_path(self, new_end, old_start):
+                        first_subnets[keys] = child_subnet
 
-            filtered = [(s,e,k) for s,e,k in edges_dict if nx.has_path(self, e, prev_split)]
-            if not filtered:
-                deepest_edge = max(edges_dict, key=lambda elem: edges_dict[elem][0])
-                edges_dict.pop(deepest_edge)
-                return deepest_edge
+            for key in inner_keys:
+                if key in keys_to_children:
+                    continue
 
-            deepest_edge = max(filtered, key=lambda elem: edges_dict[elem][0])
-            edges_dict.pop(deepest_edge)
-            return deepest_edge
+                end = self.next_node_by_key(node, key)
+                edge_len = scale_x*edge_visual_length(node, end)
+                edge = (node, end, key)
+                yield (arrow_offset, edge_len, edge)
+                arrow_offset += 2 * scale_y
 
-        calc_height((self.start, self.end))
-        origin = (0,0)
-        scale_x = scale_x if scale_x is not None else subnet_heights[(self.start, self.end)] / self.length()
-        scale_y = 1       
-        base_arrow_offset = 0.5 * scale_y
-        queue = [(self.start, (0, 0))]
-        completed = set()
+            for keys, child_subnet in first_subnets.items():
+                # if len > 1, than child_subnet starts from the same node as the current one
+                # so we need to yield all of the child subnet's edges in one group
+                if len(keys) > 1:
+                    yield from edge_generator(node, child_subnet, arrow_offset)                        
+                else:
+                    key = keys[0]
+                    end = self.next_node_by_key(node, key)
+                    edge = (node, end, key)
+                    edge_len = scale_x*edge_visual_length(node, end)
+                    yield (arrow_offset, edge_len, edge)
 
+                arrow_offset += 2*key_height[keys]
+
+        # main loop
         while queue:            
             new_nodes = set()
             node, pos = queue.pop(0)
@@ -995,37 +1024,23 @@ class Pnet(nx.MultiDiGraph):
             label_center(pos[0], pos[1], scale_x, height, str(node))
 
             new_queue=[]
-            edges_dict = {edge: depth_to_first_split(edge) for edge in self.out_edges(node, keys=True)}
-            prev_edge = None
 
-            while edges_dict:
-                prev_edge = n, child, key = pop_next_edge(edges_dict, prev_edge)
-                # child in new nodes means that there are more than 1 edge between node and child
-                if child not in new_nodes:
-                    arrow_offset = max(child_offset + base_arrow_offset, arrow_offset) 
+            for edge_offset, edge_len, edge in edge_generator(node):
+                _,child,key = edge 
 
-                alen = scale_x*edge_visual_length(node, child)
-                apos = (pos[0]+scale_x, pos[1] + arrow_offset)
-                arrow = mpatches.Arrow(apos[0], apos[1], alen, 0, width=0.05/scale_x, color = 'gray')
+                apos = (pos[0]+scale_x, pos[1] + edge_offset)
+                arrow = mpatches.Arrow(apos[0], apos[1], edge_len, 0, width=0.05/scale_x, color = 'gray')
                 ax.add_patch(arrow)
-                label_center(apos[0], apos[1], alen, 0, str(key))
-                arrow_offset += 2 * scale_y
+                label_center(apos[0], apos[1], edge_len, 0, str(key))
 
                 if child not in new_nodes and child not in completed:
-                    child_height = scale_y * node_visual_height(child)
+                    child_x = pos[0] + edge_len + scale_x
+                    child_y = pos[1] + edge_offset - base_arrow_offset
                     new_nodes.add(child)
-                    new_queue.append((child, (pos[0] + alen + scale_x, pos[1] + child_offset)))
-                    if edge_visual_length(node, child) == 1:
-                        child_offset += child_height + scale_y
-                    else:
-                        child_offset += 2*scale_y
-                elif edge_visual_length(node, child) > 1:
-                    child_offset += 2*scale_y
-
-                
+                    new_queue.append((child, (child_x, child_y)))
 
             completed.add(node)
-            # put newest nodes first - thus makin it kinda like depth-first search
+            # put newest nodes first - thus making it kinda like depth-first search
             queue = new_queue + queue
 
         plt.axis('equal')
