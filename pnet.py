@@ -466,20 +466,21 @@ class Pnet(nx.MultiDiGraph):
             True if factorization was sucessful
             False if it cannot be done
         """
-        if isinstance(subnet_or_node, int):
-            e = subnet_or_node
-        else:
-            _,e = subnet_or_node
+
+        s,e = subnet_or_node
 
         if self.in_degree(e) < 2:
             return False
 
-        prev,_,key = next(self.in_edges(e, keys=True))
+        in_subnet_edges = [(prev, curr, k) for prev, curr, k in self.in_edges(e, keys=True) if nx.has_path(self, s, prev)]
 
-        if all(k==key and self.is_transit_node(s) for s,_,k in self.in_edges(e, keys=True)):
-            merge_nodes_and_keys(self, prev, self.predecessors(e))
+        first_prev,_,key = in_subnet_edges[0]
 
-        return self.factorize(prev) or True
+        if all(k==key and self.is_transit_node(prev) for prev,_,k in in_subnet_edges):
+            merge_nodes_and_keys(self, first_prev, [prev for prev,_,_ in in_subnet_edges])
+            return self.factorize((s, first_prev)) or True
+
+        return False        
 
     def compose(self, other, self_start=None, self_end=None, other_start=None, other_end=None):
         """Compose two Pnets
