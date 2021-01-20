@@ -408,8 +408,8 @@ class Pnet(nx.MultiDiGraph):
 
         return nodes
 
-    def similarity(self, other, t=None):
-        """Check similarity of two Pnets
+    def similarity(self, other, self_start=None, self_end=None, other_start=None, other_end=None, t=None):
+        """Check similarity of two Pnets or their parts
 
         If Pnets generate same sentences up to length ``t``,
         then they are considered similar
@@ -418,6 +418,17 @@ class Pnet(nx.MultiDiGraph):
         ----------
         other : Pnet
             Pnet to compare this to
+
+        self_start : int, default self.start
+            start node in this Pnet for comparison         
+        self_end : int, default self.end
+            end node in this Pnet for comparison
+
+        other_start : int, default other.start
+            start node in other Pnet for comparison            
+        other_end : int, default other.end
+            end node in other Pnet for comparison
+
         t : int, default None
             maximum length (in the number of keys) of sentences to check,
             unlimited if equals to None
@@ -426,8 +437,14 @@ class Pnet(nx.MultiDiGraph):
         -------
         bool
         """
-        o_sents = set(tuple(s) for s in other.sents(cutoff=t))
-        s_sents = set(tuple(s) for s in self.sents(cutoff=t))
+        self_start = self_start if self_start is not None else self.start
+        self_end = self_end if self_end is not None else self.end
+
+        other_start = other_start if other_start is not None else other.start
+        other_end = other_end if other_end is not None else other.end
+
+        o_sents = set(tuple(s) for s in other.sents(other_start, other_end, cutoff=t))
+        s_sents = set(tuple(s) for s in self.sents(self_start, self_end, cutoff=t))
 
         return False if o_sents.symmetric_difference(s_sents) else True
 
@@ -464,7 +481,7 @@ class Pnet(nx.MultiDiGraph):
 
         return self.factorize(prev) or True
 
-    def compose(self, other, start=None, end=None):
+    def compose(self, other, self_start=None, self_end=None, other_start=None, other_end=None):
         """Compose two Pnets
         
         Creates new Pnet, that has edges and nodes from both nets
@@ -481,12 +498,16 @@ class Pnet(nx.MultiDiGraph):
         ----------
         other : Pnet
             other Pnet to compose with
-        start : int, default self.start
-            node to start composition from,
-            it will correspond to Start node in the other Pnet
-        end : int, default self.end
-            node where the composition ends
-            it will correspond to End node in the other Pnet
+
+        self_start : int, default self.start
+            start node in this Pnet for composition         
+        self_end : int, default self.end
+            end node in this Pnet for composition
+
+        other_start : int, default other.start
+            start node in other Pnet for composition            
+        other_end : int, default other.end
+            end node in other Pnet for composition
 
         Returns
         -------
@@ -497,15 +518,18 @@ class Pnet(nx.MultiDiGraph):
 
             None if composition cannot be done
         """
-        start = start if start is not None else self.start
-        end = end if end is not None else self.end
+        self_start = self_start if self_start is not None else self.start
+        self_end = self_end if self_end is not None else self.end
+
+        other_start = other_start if other_start is not None else other.start
+        other_end = other_end if other_end is not None else other.end
 
         net = Pnet(self)
 
-        other_to_self = {other.start: start, other.end: end}
+        other_to_self = {other_start: self_start, other_end: self_end}
         new_nodes = set()
 
-        paths = nx.all_simple_edge_paths(other, other.start, other.end)
+        paths = nx.all_simple_edge_paths(other, other_start, other_end)
 
         for path in paths:
             for o_s, o_e, key in path:
