@@ -1068,7 +1068,7 @@ class Pnet(nx.MultiDiGraph):
         def label_center(ox, oy, dx, dy, text):
             centx = (ox + ox + dx) / 2
             centy = (oy + oy + dy) / 2
-            plt.text(centx, centy, text, size=font_size/scale_x, va='center', ha='center', color=font_color)
+            plt.text(centx, centy, text, size=font_size*min(scale_x, 1/scale_x), va='center', ha='center', color=font_color)
 
         def edge_generator(node, subnet=None, arrow_offset=None):
             # iterates over edges in a subnet order
