@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import logging
 
-from utils import hierarchy_pos, merge_nodes_and_keys
+from utils import hierarchy_pos, merge_nodes_and_keys, equivalence_partition
 
 class Pnet(nx.MultiDiGraph):
     """Pnet - a hybrid between Parallel-series network and prefix tree
@@ -269,6 +269,9 @@ class Pnet(nx.MultiDiGraph):
             yield sent
 
     def _remove_node_if_dead(self, node):
+        if node not in self.nodes():
+            return
+
         if self.out_degree(node) == 0 and node != self.end:
             self.remove_node_recursive(node)
             return
@@ -283,7 +286,7 @@ class Pnet(nx.MultiDiGraph):
         If after the node removal, any (except End and Start nodes) 
         node will have 0 incoming or outgoing edges, it will also be removed
 
-        Unlike ``Multigraph.remove_node``, ensures that Pnet stays valid
+        Unlike ``Multigraph.remove_node``, ensures that Pnet stays valid_close
 
         Parameters
         ----------
@@ -313,7 +316,7 @@ class Pnet(nx.MultiDiGraph):
         If after the edge removal, any (except End and Start nodes) 
         node will have 0 incoming or outgoing edges, it will also be removed
 
-        Unlike ``Multigraph.remove_node``, ensures that Pnet stays valid
+        Unlike ``Multigraph.remove_node``, ensures that Pnet stays valid_close
 
         Parameters
         ----------
@@ -448,8 +451,8 @@ class Pnet(nx.MultiDiGraph):
 
         return False if o_sents.symmetric_difference(s_sents) else True
 
-    def factorize(self, subnet_or_node):
-        """Right factorize subnet or node
+    def factorize(self, subnet):
+        """Attempt to factorize subnet
 
         Merge ancestors of given node (or subnet's end node),
         if they all have single path to a given node,
@@ -457,8 +460,8 @@ class Pnet(nx.MultiDiGraph):
 
         Parameters
         ----------
-        subnet_or_node : (int, int) or int
-            subnet or node to factorize
+        subnet : (int, int)
+            subnet to attempt factorization
 
         Returns
         -------
@@ -467,7 +470,7 @@ class Pnet(nx.MultiDiGraph):
             False if it cannot be done
         """
 
-        s,e = subnet_or_node
+        s,e = subnet
 
         if self.in_degree(e) < 2:
             return False
@@ -480,14 +483,133 @@ class Pnet(nx.MultiDiGraph):
             merge_nodes_and_keys(self, first_prev, [prev for prev,_,_ in in_subnet_edges])
             return self.factorize((s, first_prev)) or True
 
-        return False        
+        return False
+
+    def divide(self, subnet, subnet_tree=None, t=None, h=None):
+        """Attempt to divide subnet
+       
+        Parameters
+        ----------
+        subnet : (int, int)
+            subnet to attempt division
+        subnet_tree : networkx.DiGraph, optional
+            subnet hierarchy tree with additional labels
+            if not given, it will be calculated automatically
+
+        t : int, default None
+            division parameter,
+            used in similarity checks
+
+        h : int, default None
+            division parameter,
+            used as a depth threshold
+
+            if None - depth is unlimited
+
+        Returns
+        -------
+        success : bool
+            True if factorization was sucessful
+            False if it cannot be done
+
+        See Also
+        --------
+        similarity
+
+        """
+        h = h if h is not None else math.inf
+        subnet_tree = subnet_tree if subnet_tree is not None else self.subnet_tree()
+        s,e = subnet
+        
+
+        def division_equivalence(node1, node2):
+            return self.similarity(self, node1, e, node2, e, t=t)
+
+        descendant_starts = {desc_s for desc_s,_ in nx.descendants(subnet_tree, subnet)}
+
+        deep_nodes = set()
+        close_nodes = set()
+
+        for node in self.between_nodes(s,e,edge_cases=False):
+            if nx.shortest_path_length(self, s, node) > h:
+                deep_nodes.add(node)
+            else:
+                close_nodes.add(node)
+
+        classes, partition = equivalence_partition(close_nodes, division_equivalence)
+
+        # remove child nodes from classes
+        for eq_class in classes:
+            for curr_node in list(eq_class):
+                if any(curr_node != node and nx.has_path(self, node, curr_node) for node in eq_class):
+                    eq_class.remove(curr_node)
+                    partition.pop(curr_node)
+
+        valid_close = []
+        valid_deep = []
+        paths = list(nx.all_simple_paths(self,s,e))
+        for eq_class in classes:
+            flag = False
+            deep_part = set()
+            for path in paths:
+                flag = False
+                for node in path:
+                    if node in eq_class:
+                        flag = True
+                        break
+
+                    if node in deep_nodes:
+                        flag = True
+                        deep_part.add(node)
+                        break
+
+                # no path through node in eq_class or through deep node
+                if not flag:
+                    break
+
+            if flag:
+                valid_close.append(eq_class)
+                valid_deep.append(deep_part)
+
+        print(close_nodes, deep_nodes, classes, partition, valid_close, valid_deep, '\n', sep='\n')
+
+        if not valid_close:
+            return False
+
+        valid_close = valid_close[0]
+        valid_deep = valid_deep[0]
+
+        first_node = next(iter(valid_close))
+        net = Pnet(self)
+
+        # delete deep nodes (>h)
+        for node in valid_deep:
+            if node in net.nodes():
+                net.remove_node_recursive(node)
+
+        # merge close (<=h)
+        for node in valid_close:
+            if node != first_node:
+                success = net.compose(net, self_start=first_node, self_end=e, other_start=node, other_end=e)
+                if not success:
+                    return False
+
+                start_net = net.subcopy(s, node)
+                if node in net.nodes():
+                    net.remove_node_recursive(node)
+
+                success =  net.compose(start_net, self_start=s, self_end=first_node)
+                if not success:
+                    return False
+
+        self.__init__(net)
+        return True
 
     def compose(self, other, self_start=None, self_end=None, other_start=None, other_end=None):
         """Compose two Pnets
-        
-        Creates new Pnet, that has edges and nodes from both nets
 
-        May fail due to collisions, in which case ``None`` is returned
+        May fail due to collisions, in which case ``False`` is returned,
+        and Pnet is left unchanged
 
         Note
         ----
@@ -512,12 +634,12 @@ class Pnet(nx.MultiDiGraph):
 
         Returns
         -------
-        net : Pnet or None
-            new, composed Pnet
+        bool : 
+            True, if composition was successful
             
             OR
 
-            None if composition cannot be done
+            False, if composition cannot be done
         """
         self_start = self_start if self_start is not None else self.start
         self_end = self_end if self_end is not None else self.end
@@ -560,17 +682,18 @@ class Pnet(nx.MultiDiGraph):
                         merge_nodes_and_keys(net, expected_s_e, [actual_s_e])
                         other_to_self[o_e] = expected_s_e
                     else:
-                        return None
+                        return False
 
                 s_e = other_to_self[o_e]
 
                 # 2 or more other nodes for 1 self node
                 if len([other_node for other_node,self_node in other_to_self.items() if self_node==s_e]) > 1:
-                    return None
+                    return False
 
                 net.add_edge(s_s, s_e, key)
 
-        return net
+        self.__init__(net)
+        return True
 
     def collapse(self, start=None, end=None):
         """Merge start and end nodes, and remove everything between them
@@ -737,7 +860,7 @@ class Pnet(nx.MultiDiGraph):
     def subnets(self):
         """Get a set of all non-trivial subnets
 
-        Subnet is a subgraph of Pnet, that is a valid Pnet itself,
+        Subnet is a subgraph of Pnet, that is a valid_close Pnet itself,
         i.e it has Start and End nodes, and for all its inner nodes:
         * outgoing paths lead to End node
         * incoming paths go from Start node

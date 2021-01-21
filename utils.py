@@ -2,6 +2,41 @@ import networkx as nx
 import random
 
 
+
+def equivalence_partition(iterable, relation):
+    """Partitions a set of objects into equivalence classes
+
+    Parameters
+    ----------
+    iterable : 
+        collection of objects to be partitioned
+    relation : 
+        equivalence relation. I.e. relation(o1,o2) evaluates to True
+        if and only if o1 and o2 are equivalent
+    
+    Returns
+    -------
+    classes, partitions :
+        classes: A sequence of sets. Each one is an equivalence class
+        partitions: A dictionary mapping objects to equivalence classes
+    """
+    classes = []
+    partitions = {}
+    for o in iterable:  # for each object
+        # find the class it is in
+        found = False
+        for c in classes:
+            if relation(next(iter(c)), o):  # is it equivalent to this class?
+                c.add(o)
+                partitions[o] = c
+                found = True
+                break
+        if not found:  # it is in a new class
+            classes.append(set([o]))
+            partitions[o] = classes[-1]
+    return classes, partitions
+
+
 def merge_nodes_and_keys(G, keep_node, merge_nodes):
     """Merges nodes into one, while also merging edges with same key
 

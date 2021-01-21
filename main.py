@@ -15,14 +15,43 @@ C -> 'C' B | 'c'
 
 grammar = CFG.fromstring(GRAMMAR)
 
-sents = [s for s in generate(grammar, depth=MAX_DEPTH) if len(s) <= MAX_LENGTH]
+# sents = [s for s in generate(grammar, depth=MAX_DEPTH) if len(s) <= MAX_LENGTH]
+
+sents = [
+	'#',
+	'aaca',
+	'aabaca',
+	'a(a)ca',
+	'aab(a)ca',
+	'aababaca',
+	'a((a))ca',
+	'a(a)baca',
+	'aab(a)baca',
+	'a((a))baca',
+	'a(a)b(a)ca',
+	'a(a)babaca',
+	'a((a))b(a)ca',
+	'a((a))babaca',
+	'a(a)b(a)baca',
+	'a((((a))))baca',
+	'a((a))b(a)baca',
+	'a((((a))))b(a)ca',
+	'a((a))babababaca'
+]
 
 p = Pnet(sents)
+p.factorize((1,-1))
 
-p01 = Pnet(['cd'])
-p02 = Pnet(['ab'])
-p1 = Pnet(['ab', 'cd'])
-p2 = nx.relabel_nodes(p1,{1:2})
+p.divide((29,3), t=3,h=7)
+p.divide((4,3), t=3,h=7)
+p.divide((23,3), t=3,h=7)
+
+p.divide((1,3),t=3,h=7)
+
+# p01 = Pnet(['cd'])
+# p02 = Pnet(['ab'])
+# p1 = Pnet(['ab', 'cd'])
+# p2 = nx.relabel_nodes(p1,{1:2})
 
 
 
