@@ -549,6 +549,10 @@ class Pnet(nx.MultiDiGraph):
         valid_deep = []
         paths = list(nx.all_simple_paths(self,s,e))
         for eq_class in classes:
+            # ignore classes with less then 2 nodes to merge
+            if len(eq_class) < 2:
+                continue
+
             flag = False
             deep_part = set()
             for path in paths:
