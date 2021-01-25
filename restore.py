@@ -10,6 +10,14 @@ from utils import equivalence_partition
 def restore(sents):
     """Create grammars that can produce given sentences
 
+    Grammar syntax example:
+
+    S -> 'c' A 'a' B | 'b'
+
+    A -> 'a' A | 'A'
+
+    B -> 'b' A
+
     Parameters
     ----------
     sents: collection of str
@@ -19,13 +27,6 @@ def restore(sents):
     -------
     grammars : set of str
         grammars that can produce given sentences
-
-    Grammar example
-    ---------------
-    S -> 'c' A 'a' B | 'b'
-    A -> 'a' A | 'A'
-    B -> 'b' A
-
     """
     maxlen = len(max(sents, key=len))
     res = set()
@@ -44,6 +45,14 @@ def restore(sents):
 def check_grammar(grammar, sent):
     """Check if sentence can be produced by grammar
 
+    Grammar syntax example:
+
+    S -> 'c' A 'a' B | 'b'
+
+    A -> 'a' A | 'A'
+
+    B -> 'b' A
+
     Parameters
     ----------
     grammar : str
@@ -55,12 +64,6 @@ def check_grammar(grammar, sent):
     Returns
     -------
     bool
-
-    Grammar example
-    ---------------
-    S -> 'c' A 'a' B | 'b'
-    A -> 'a' A | 'A'
-    B -> 'b' A
     """
     g = CFG.fromstring(grammar)
     parser = RecursiveDescentParser(g)
@@ -123,7 +126,7 @@ def net_transform(net, t=None, h=None):
 
     See Also
     --------
-    Pnet, Pnet.divide, restore
+    pnet.Pnet, pnet.Pnet.divide, restore
     """
     flag = True
     i = 0
@@ -190,7 +193,7 @@ def net_to_grammar(net, t=None):
 
     See Also
     --------
-    Pnet, restore
+    pnet.Pnet, restore
     """
 
     def subnet_eqivalence(net1, net2):
