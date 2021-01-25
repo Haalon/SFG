@@ -575,7 +575,8 @@ class Pnet(nx.MultiDiGraph):
                 valid_close.append(eq_class)
                 valid_deep.append(deep_part)
 
-        print(close_nodes, deep_nodes, classes, partition, valid_close, valid_deep, '\n', sep='\n')
+        # print(close_nodes, deep_nodes, classes, partition, valid_close, valid_deep, '\n', sep='\n')
+
 
         if not valid_close:
             return False
@@ -605,6 +606,9 @@ class Pnet(nx.MultiDiGraph):
                 success =  net.compose(start_net, self_start=s, self_end=first_node)
                 if not success:
                     return False
+
+        # print(f'\t<= h nodes {valid_close}')
+        # print(f'\t>  h nodes {valid_deep}')
 
         self.__init__(net)
         return True
@@ -947,7 +951,7 @@ class Pnet(nx.MultiDiGraph):
 
         return tree
 
-    def draw_subnet_tree(self, subnet_tree=None, filename=None, dpi=960, show=True, **kwargs):
+    def draw_subnet_tree(self, subnet_tree=None, filename=None, dpi=192, show=True, **kwargs):
         """Draw a subnet hierarchy tree
 
         Drawing is done using matplotlib via networkx.draw
@@ -960,7 +964,7 @@ class Pnet(nx.MultiDiGraph):
         filename : str, optional
             file name to save image to
             if None, image is not saved
-        dpi : int, default 960
+        dpi : int, default 192
             saved image dpi, higher number mean bigger image
             (matplotlib does not allow to set image size)
         show : bool, default True
@@ -987,7 +991,7 @@ class Pnet(nx.MultiDiGraph):
         if show:
             plt.show()
 
-    def draw(self, scale_x=None, font_size=32, font_color='black', cmap='viridis', filename=None, dpi=960, show=True):
+    def draw(self, scale_x=None, font_size=32, font_color='black', cmap='viridis', filename=None, dpi=192, show=True):
         """Draw a Pnet
 
         Drawing is done using matplotlib
@@ -1007,7 +1011,7 @@ class Pnet(nx.MultiDiGraph):
         filename : str, optional
             file name to save image to
             if None, image is not saved
-        dpi : int, default 960
+        dpi : int, default 192
             saved image dpi, higher number mean bigger image
             (matplotlib does not allow to set image size)
         show : bool, default True

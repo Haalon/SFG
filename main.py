@@ -3,8 +3,9 @@ from nltk import CFG
 
 import networkx as nx
 from pnet import Pnet
+from restore import *
 
-MAX_DEPTH = 6
+MAX_DEPTH = 7
 MAX_LENGTH = 8
 GRAMMAR = '''
 S -> 'S' A B | 's' C
@@ -15,38 +16,51 @@ C -> 'C' B | 'c'
 
 grammar = CFG.fromstring(GRAMMAR)
 
-# sents = [s for s in generate(grammar, depth=MAX_DEPTH) if len(s) <= MAX_LENGTH]
+sents = [s for s in generate(grammar, depth=MAX_DEPTH) if len(s) <= MAX_LENGTH]
 
-sents = [
-	'#',
-	'aaca',
-	'aabaca',
-	'a(a)ca',
-	'aab(a)ca',
-	'aababaca',
-	'a((a))ca',
-	'a(a)baca',
-	'aab(a)baca',
-	'a((a))baca',
-	'a(a)b(a)ca',
-	'a(a)babaca',
-	'a((a))b(a)ca',
-	'a((a))babaca',
-	'a(a)b(a)baca',
-	'a((((a))))baca',
-	'a((a))b(a)baca',
-	'a((((a))))b(a)ca',
-	'a((a))babababaca'
-]
+# sents = [
+# 	'#',
+# 	'aaca',
+# 	'aabaca',
+# 	'a(a)ca',
+# 	'aab(a)ca',
+# 	'aababaca',
+# 	'a((a))ca',
+# 	'a(a)baca',
+# 	'aab(a)baca',
+# 	'a((a))baca',
+# 	'a(a)b(a)ca',
+# 	'a(a)babaca',
+# 	'a((a))b(a)ca',
+# 	'a((a))babaca',
+# 	'a(a)b(a)baca',
+# 	'a((((a))))baca',
+# 	'a((a))b(a)baca',
+# 	'a((((a))))b(a)ca',
+# 	'a((a))babababaca'
+# ]
 
-p = Pnet(sents)
-p.factorize((1,-1))
+# p = Pnet(sents)
 
-p.divide((29,3), t=3,h=7)
-p.divide((4,3), t=3,h=7)
-p.divide((23,3), t=3,h=7)
+# algo(p,3,15)
+# S, gram = net_to_grammar(p,3)
+# print(gram)
+# check_grammar(gram, sents)
+# # p.factorize((1,-1))
 
-p.divide((1,3),t=3,h=7)
+# p.divide((29,3), t=3,h=7)
+# p.divide((4,3), t=3,h=7)
+# p.divide((23,3), t=3,h=7)
+
+# p.divide((1,3),t=3,h=7)
+
+# p.factorize((7,2))
+
+
+		
+
+
+
 
 # p01 = Pnet(['cd'])
 # p02 = Pnet(['ab'])
