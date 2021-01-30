@@ -1,12 +1,14 @@
 from nltk.parse.generate import generate
 from nltk import CFG
+from networkx.readwrite import json_graph
 
+import json
 import networkx as nx
 from pnet import Pnet
 from restore import *
 
 MAX_DEPTH = 7
-MAX_LENGTH = 8
+MAX_LENGTH = 12
 GRAMMAR = '''
 S -> 'S' A B | 's' C
 A -> 'A' A C | 'a'
@@ -17,6 +19,16 @@ C -> 'C' B | 'c'
 grammar = CFG.fromstring(GRAMMAR)
 
 sents = [s for s in generate(grammar, depth=MAX_DEPTH) if len(s) <= MAX_LENGTH]
+
+with open('graph.json') as f:
+    data = f.read()
+    data = json.loads(data)
+    g = json_graph.node_link_graph(data)
+    p = Pnet(g)
+
+
+# res = restore(sents, maxt=2)
+# minres = min(res, key=len)
 
 # sents = [
 # 	'#',

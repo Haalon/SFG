@@ -7,7 +7,7 @@ from pnet import Pnet
 from utils import equivalence_partition
 
 
-def restore(sents):
+def restore(sents, maxt=None, maxh=None):
     """Create grammars that can produce given sentences
 
     Grammar syntax example:
@@ -29,16 +29,21 @@ def restore(sents):
         grammars that can produce given sentences
     """
     maxlen = len(max(sents, key=len))
+    maxt = maxt if maxt is not None else maxlen
+    maxh = maxh if maxh is not None else maxlen
+
     res = set()
-    for t,h in product(range(1, maxlen+1), repeat=2):
+    for t,h in product(range(1, maxt+1), range(1, maxh+1)):
         p = Pnet(sents)
         net_transform(p, t, h)
         _, g = net_to_grammar(p, t)
 
         if all(check_grammar(g, s) for s in sents):
-            # print(f'Success with t={t}, h={h}')
-            # print(g, '\n')
+            print(f'Success with t={t}, h={h}')
+            print(g, '\n')
             res.add(g)
+        else:
+            print(f'Fail with t={t}, h={h}')
 
     return res
 
@@ -84,6 +89,7 @@ def _net_transform_step(net, step_type='factorization', t=None, h=None):
     i = 0
     queue = [root]
 
+    print(f'\n{step_type} attempt with t={t} h={h}')
     while queue:
         flag = False
         for subnet in queue:
@@ -95,12 +101,15 @@ def _net_transform_step(net, step_type='factorization', t=None, h=None):
                 raise ValueError
 
             flag = flag or success
-            # if success:
-            #   # print(f'Success {step_type} of {subnet}')
+            if success:
+                print(f'\tSuccess {step_type} of {subnet} ({i})')
+            else:
+                print(f'\tFailed {step_type} of {subnet} ({i})')
 
         if flag:
             return True
         i += 1
+
         queue = nx.descendants_at_distance(tree, root, i)
 
     return False
@@ -131,7 +140,7 @@ def net_transform(net, t=None, h=None):
     flag = True
     i = 0
     while flag:
-        # net.draw(font_size=12, filename=f'net_transform-{i}.png', show=False)
+        net.draw(font_size = 50, filename=f'algo{i}.png')
         i+=1
         flag = _net_transform_step(net, 'factorization',t,h)
         if flag:
