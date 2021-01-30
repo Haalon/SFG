@@ -2,7 +2,7 @@ import networkx as nx
 from nltk.parse.recursivedescent import RecursiveDescentParser
 from nltk import CFG
 from itertools import product
-
+from functools import cmp_to_key
 from pnet import Pnet
 from utils import equivalence_partition
 
@@ -203,8 +203,7 @@ def net_to_grammar(net, t=None):
     See Also
     --------
     pnet.Pnet, restore
-    """
-
+    """   
     def subnet_eqivalence(net1, net2):
         s1, e1 = net1
         s2, e2 = net2
@@ -212,9 +211,31 @@ def net_to_grammar(net, t=None):
 
     subnet_tree = net.subnet_tree()
     classes, partition = equivalence_partition(subnet_tree.nodes, subnet_eqivalence)
-
-    non_terms = {net: str(classes.index(eclass)) for net, eclass in partition.items()}
     root = (net.start, net.end)
+
+    def subnet_order(net1, net2):
+        if nx.has_path(subnet_tree, net1, net2):
+            return -1
+
+        if nx.has_path(subnet_tree, net2, net1):
+            return 1
+
+        minkey1 = min(next(iter(subnet_tree.in_edges(net1, data=True)))[2]['keys'])
+        minkey2 = min(next(iter(subnet_tree.in_edges(net1, data=True)))[2]['keys'])
+
+        if minkey1 < minkey2:
+            return -1
+        elif minkey1 > minkey2:
+            return 1
+
+        if nx.has_path(net, net1[1], net2[0]):
+            return -1
+        else:
+            return 1
+
+    ordered = sorted(subnet_tree.nodes, key=cmp_to_key(subnet_order))
+    non_terms = {net: str(classes.index(partition[net])) for net in ordered}
+    
     queue = [root]
 
     S = non_terms[root]
