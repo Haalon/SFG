@@ -1,7 +1,10 @@
 import networkx as nx
-import math 
+from networkx.readwrite import json_graph
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
+
+import json
+import math 
 import logging
 
 from utils import hierarchy_pos, merge_nodes_and_keys, equivalence_partition
@@ -62,6 +65,13 @@ class Pnet(nx.MultiDiGraph):
             self.next_node_id = data.next_node_id
             return
 
+        if isinstance(data, nx.MultiDiGraph):
+            super().__init__(data)
+            self.start = next(node for node in data.nodes() if data.in_degree(node) == 0)
+            self.end = next(node for node in data.nodes() if data.out_degree(node) == 0)
+            self.next_node_id = 1 + max(data.nodes())
+            return
+
         super().__init__()
         self.start = Pnet._start
         self.end = Pnet._end
@@ -69,6 +79,20 @@ class Pnet(nx.MultiDiGraph):
 
         if data is not None:
             self.add_sents(data)
+
+    @staticmethod
+    def load(filename):
+        with open(filename, 'r') as f:
+            data = json.load(f)
+            g = json_graph.node_link_graph(data)
+            p = Pnet(g)
+
+        return p
+
+    def save(self, filename):
+        with open(filename, 'w') as f:
+            data = json_graph.node_link_data(self)
+            json.dump(data, f)
 
     def add_sents(self, sent_list, start=None, end=None, on_collision='warn'):
         """Add sentences to this Pnet
@@ -592,6 +616,9 @@ class Pnet(nx.MultiDiGraph):
             if node in net.nodes():
                 net.remove_node_recursive(node)
 
+        # print(f'\t<= h nodes {valid_close}')
+        # print(f'\t>  h nodes {valid_deep}')
+
         # merge close (<=h)
         for node in valid_close:
             if node != first_node:
@@ -607,8 +634,6 @@ class Pnet(nx.MultiDiGraph):
                 if not success:
                     return False
 
-        # print(f'\t<= h nodes {valid_close}')
-        # print(f'\t>  h nodes {valid_deep}')
 
         self.__init__(net)
         return True
@@ -699,6 +724,7 @@ class Pnet(nx.MultiDiGraph):
                     return False
 
                 net.add_edge(s_s, s_e, key)
+
 
         self.__init__(net)
         return True
