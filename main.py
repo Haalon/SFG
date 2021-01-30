@@ -8,7 +8,7 @@ from pnet import Pnet
 from restore import *
 
 MAX_DEPTH = 7
-MAX_LENGTH = 12
+MAX_LENGTH = 10
 GRAMMAR = '''
 S -> 'S' A B | 's' C
 A -> 'A' A C | 'a'
@@ -20,11 +20,11 @@ grammar = CFG.fromstring(GRAMMAR)
 
 sents = [s for s in generate(grammar, depth=MAX_DEPTH) if len(s) <= MAX_LENGTH]
 
-with open('graph.json') as f:
-    data = f.read()
-    data = json.loads(data)
-    g = json_graph.node_link_graph(data)
-    p = Pnet(g)
+p = Pnet.load('graph.json')
+p1 = Pnet(['fae'])
+p2= Pnet(['faac', 'fbbc'])
+p2.factorize((0,-1))
+
 
 
 # res = restore(sents, maxt=2)

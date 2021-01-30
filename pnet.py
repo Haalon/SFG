@@ -638,6 +638,16 @@ class Pnet(nx.MultiDiGraph):
         self.__init__(net)
         return True
 
+    def is_valid(self):
+        tree = self.subnet_tree()
+        for node in tree.nodes():
+            for _,_,data in tree.out_edges(node,data=True):
+                keys_to_child = set(data['keys'])
+                if any(keys_to_child.intersection(data2['keys']) and data2['keys'] != data['keys'] for _,_,data2 in tree.out_edges(node,data=True)):
+                    return False
+
+        return True
+
     def compose(self, other, self_start=None, self_end=None, other_start=None, other_end=None):
         """Compose two Pnets
 
@@ -725,6 +735,11 @@ class Pnet(nx.MultiDiGraph):
 
                 net.add_edge(s_s, s_e, key)
 
+        # composition can break the parallel-series structure of Pnet
+        # currently it is checked after and not during the composition
+        # which is not very efficient
+        if not net.is_valid():
+            return False
 
         self.__init__(net)
         return True

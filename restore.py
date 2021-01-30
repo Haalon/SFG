@@ -89,7 +89,7 @@ def _net_transform_step(net, step_type='factorization', t=None, h=None):
     i = 0
     queue = [root]
 
-    print(f'\n{step_type} attempt with t={t} h={h}')
+    # print(f'\n{step_type} attempt with t={t} h={h}')
     while queue:
         flag = False
         for subnet in queue:
@@ -101,10 +101,10 @@ def _net_transform_step(net, step_type='factorization', t=None, h=None):
                 raise ValueError
 
             flag = flag or success
-            if success:
-                print(f'\tSuccess {step_type} of {subnet} ({i})')
-            else:
-                print(f'\tFailed {step_type} of {subnet} ({i})')
+            # if success:
+            #     print(f'\tSuccess {step_type} of {subnet} ({i})')
+            # else:
+            #     print(f'\tFailed {step_type} of {subnet} ({i})')
 
         if flag:
             return True
@@ -140,7 +140,7 @@ def net_transform(net, t=None, h=None):
     flag = True
     i = 0
     while flag:
-        net.draw(font_size = 50, filename=f'algo{i}.png')
+        # net.draw(font_size = 50, filename=f'algo{i}.png')
         i+=1
         flag = _net_transform_step(net, 'factorization',t,h)
         if flag:
