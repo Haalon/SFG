@@ -101,8 +101,8 @@ def _net_transform_step(net, step_type='factorization', t=None, h=None):
                 raise ValueError
 
             flag = flag or success
-            # if success:
-            #     print(f'\tSuccess {step_type} of {subnet} ({i})')
+            if success:
+                print(f'\tSuccess {step_type} of {subnet} ({i})')
             # else:
             #     print(f'\tFailed {step_type} of {subnet} ({i})')
 

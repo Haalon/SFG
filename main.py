@@ -18,39 +18,37 @@ C -> 'C' B | 'c'
 
 grammar = CFG.fromstring(GRAMMAR)
 
-sents = [s for s in generate(grammar, depth=MAX_DEPTH) if len(s) <= MAX_LENGTH]
+# sents = [s for s in generate(grammar, depth=MAX_DEPTH) if len(s) <= MAX_LENGTH]
+sents = [
+	'#',
+	'aaca',
+	'aabaca',
+	'a(a)ca',
+	'aab(a)ca',
+	'aababaca',
+	'a((a))ca',
+	'a(a)baca',
+	'aab(a)baca',
+	'a((a))baca',
+	'a(a)b(a)ca',
+	'a(a)babaca',
+	'a((a))b(a)ca',
+	'a((a))babaca',
+	'a(a)b(a)baca',
+	'a((((a))))baca',
+	'a((a))b(a)baca',
+	'a((((a))))b(a)ca',
+	'a((a))babababaca'
+]
 
-p = Pnet.load('graph.json')
-p1 = Pnet(['fae'])
-p2= Pnet(['faac', 'fbbc'])
-p2.factorize((0,-1))
+# p = Pnet.load('graph.json')
+# p1 = Pnet(['fae'])
+# p2= Pnet(['faac', 'fbbc'])
+# p2.factorize((0,-1))
+res = restore(sents, maxt=5)
+minres = min(res, key=len)
+# should be 3 3
 
-
-
-# res = restore(sents, maxt=2)
-# minres = min(res, key=len)
-
-# sents = [
-# 	'#',
-# 	'aaca',
-# 	'aabaca',
-# 	'a(a)ca',
-# 	'aab(a)ca',
-# 	'aababaca',
-# 	'a((a))ca',
-# 	'a(a)baca',
-# 	'aab(a)baca',
-# 	'a((a))baca',
-# 	'a(a)b(a)ca',
-# 	'a(a)babaca',
-# 	'a((a))b(a)ca',
-# 	'a((a))babaca',
-# 	'a(a)b(a)baca',
-# 	'a((((a))))baca',
-# 	'a((a))b(a)baca',
-# 	'a((((a))))b(a)ca',
-# 	'a((a))babababaca'
-# ]
 
 # p = Pnet(sents)
 
