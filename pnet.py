@@ -50,8 +50,9 @@ class Pnet(nx.MultiDiGraph):
 
         Parameters
         ----------
-        data : Pnet or container  of str, optional
+        data :  optional
             In case of Pnet given - copies it
+            In case of MultiDiGraph - copies it and tries to find start and end nodes
             otherwise - initializes Pnet form the given container of sentences
 
         See Also
@@ -82,6 +83,16 @@ class Pnet(nx.MultiDiGraph):
 
     @staticmethod
     def load(filename):
+        """Load Pname from file
+
+        Parameters
+        ----------
+        filename :  str
+
+        See Also
+        --------
+        save
+        """
         with open(filename, 'r') as f:
             data = json.load(f)
             g = json_graph.node_link_graph(data)
@@ -90,6 +101,16 @@ class Pnet(nx.MultiDiGraph):
         return p
 
     def save(self, filename):
+        """Save Pname to file
+
+        Parameters
+        ----------
+        filename :  str
+
+        See Also
+        --------
+        load
+        """
         with open(filename, 'w') as f:
             data = json_graph.node_link_data(self)
             json.dump(data, f)
@@ -645,6 +666,12 @@ class Pnet(nx.MultiDiGraph):
         return True
 
     def is_valid(self):
+        """Checks if Pnets structure is valid
+
+        Returns
+        -------
+        bool
+        """
         tree = self.subnet_tree()
         for node in tree.nodes():
             for _,_,data in tree.out_edges(node,data=True):

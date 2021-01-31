@@ -23,6 +23,12 @@ def restore(sents, maxt=None, maxh=None):
     sents: collection of str
         sentences to use in restoration
 
+    maxt: int
+        check up values of t up to this parameter
+
+    maxh: int
+        check up values of h up to this parameter
+
     Returns
     -------
     grammars : set of str
