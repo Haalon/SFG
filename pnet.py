@@ -584,12 +584,13 @@ class Pnet(nx.MultiDiGraph):
         for node in self.between_nodes(s,e,edge_cases=False):
             if nx.shortest_path_length(self, s, node) > h:
                 deep_nodes.add(node)
-            else:
+            elif self.out_degree(node) > 1:
                 close_nodes.add(node)
 
         classes, partition = equivalence_partition(close_nodes, division_equivalence)
 
         # remove child nodes from classes
+        # otherwise we may merge child with parent (extremely illegal)
         for eq_class in classes:
             for curr_node in list(eq_class):
                 if any(curr_node != node and nx.has_path(self, node, curr_node) for node in eq_class):
@@ -626,14 +627,14 @@ class Pnet(nx.MultiDiGraph):
                 valid_close.append(eq_class)
                 valid_deep.append(deep_part)
 
-        # print(close_nodes, deep_nodes, classes, partition, valid_close, valid_deep, '\n', sep='\n')
-
-
         if not valid_close:
             return False
 
-        valid_close = valid_close[0]
-        valid_deep = valid_deep[0]
+        # print(close_nodes, deep_nodes, classes, partition, valid_close, valid_deep, '\n', sep='\n')
+
+        # if many valid sets, select ones with smallest total amount of elements
+        valids = zip(valid_close, valid_deep)
+        valid_close, valid_deep = min(valids, key=lambda c_d: len(c_d[0]) + len(c_d[1]))
 
         first_node = next(iter(valid_close))
         net = Pnet(self)
@@ -643,24 +644,25 @@ class Pnet(nx.MultiDiGraph):
             if node in net.nodes():
                 net.remove_node_recursive(node)
 
-        # print(f'\t<= h nodes {valid_close}')
-        # print(f'\t>  h nodes {valid_deep}')
-
-        # merge close (<=h)
+        # merge close nodes (<=h)
+        left_net = net.subcopy(s, first_node)
         for node in valid_close:
             if node != first_node:
                 success = net.compose(net, self_start=first_node, self_end=e, other_start=node, other_end=e)
                 if not success:
                     return False
 
-                start_net = net.subcopy(s, node)
+                tmp_net = net.subcopy(s, node)
                 if node in net.nodes():
                     net.remove_node_recursive(node)
 
-                success =  net.compose(start_net, self_start=s, self_end=first_node)
+                success = left_net.compose(tmp_net, self_start=s, self_end=first_node)
                 if not success:
                     return False
 
+        success = net.compose(left_net, self_start=s, self_end=first_node)
+        if not success:
+            return False
 
         self.__init__(net)
         return True
@@ -841,10 +843,9 @@ class Pnet(nx.MultiDiGraph):
         subnodes = self.between_nodes(start, end)
         new_net = self.subgraph(subnodes).copy()
 
-        nx.relabel_nodes(new_net, {end: Pnet._end}, copy=False)
         new_net.start = start
-        new_net.end = Pnet._end
-        new_net.next_node_id = end
+        new_net.end = end
+        new_net.next_node_id = 1 + max(new_net.nodes())
         return new_net
 
     def envelope_node(self, node, mode='start'):
