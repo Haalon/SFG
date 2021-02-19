@@ -683,6 +683,27 @@ class Pnet(nx.MultiDiGraph):
 
         return True
 
+
+    def _compose_inplace(self, other, target_node, other_start=None, other_end=None):
+        new_start = self.next_node_id
+        self.add_node(new_start)
+        self.next_node_id += 1
+
+        for s,e,k in list(self.in_edges(target_node, keys=True)):
+            self.add_edge(s, new_start, key=k)
+            self.remove_edge(s,e,key=k)
+
+        node_map = {n: n + self.next_node_id for n in other.nodes()}
+        node_map[other.start] = new_start
+        node_map[other.end] = target_node
+
+        copy = nx.relabel_nodes(other, node_map)
+
+        res = nx.compose(self, copy)
+        self.__init__(res)
+
+        return True
+
     def compose(self, other, self_start=None, self_end=None, other_start=None, other_end=None):
         """Compose two Pnets
 
@@ -724,6 +745,9 @@ class Pnet(nx.MultiDiGraph):
 
         other_start = other_start if other_start is not None else other.start
         other_end = other_end if other_end is not None else other.end
+
+        if self_start == self_end:
+            return self._compose_inplace(other, self_start, other_start, other_end)
 
         net = Pnet(self)
 

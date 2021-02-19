@@ -45,8 +45,8 @@ sents = [s for s in generate(grammar, depth=MAX_DEPTH) if len(s) <= MAX_LENGTH]
 # p1 = Pnet(['fae'])
 # p2= Pnet(['faac', 'fbbc'])
 # p2.factorize((0,-1))
-res = restore(sents)
-minres = min(res, key=len)
+# res = restore(sents)
+# minres = min(res, key=len)
 # should be 3 3
 
 
