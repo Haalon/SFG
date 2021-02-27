@@ -80,7 +80,7 @@ def check_grammar(grammar, sent):
     parser = RecursiveDescentParser(g)
 
     try:
-        if not parser.parse(sent):
+        if not list(parser.parse(sent)):
             return False
 
     except ValueError:
@@ -239,6 +239,8 @@ def net_to_grammar(net, t=None):
         else:
             return 1
 
+    # nets are ordered so that Pnets with the same structure but different edge order 
+    # will produce grammars with same order of rules and alternatives
     ordered = sorted(subnet_tree.nodes, key=cmp_to_key(subnet_order))
     non_terms = {net: str(classes.index(partition[net])) for net in ordered}
     
@@ -250,7 +252,8 @@ def net_to_grammar(net, t=None):
     rules = []
 
     while queue:
-        curr = queue.pop()
+        curr = queue.pop(0)
+
         if non_terms[curr] in completed:
             continue
 
