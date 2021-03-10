@@ -630,7 +630,7 @@ class Pnet(nx.MultiDiGraph):
         if not valid_close:
             return False
 
-        # print(close_nodes, deep_nodes, classes, partition, valid_close, valid_deep, '\n', sep='\n')
+        print(close_nodes, deep_nodes, classes, partition, valid_close, valid_deep, '\n', sep='\n')
 
         # if many valid sets, select ones with smallest total amount of elements
         valids = zip(valid_close, valid_deep)
@@ -1090,7 +1090,7 @@ class Pnet(nx.MultiDiGraph):
         if show:
             plt.show()
 
-    def draw(self, scale_x=None, font_size=32, font_color='black', cmap='viridis', filename=None, dpi=192, show=True):
+    def draw(self, scale_x=None, font_size=32, font_color='black', color=None, ec='black', cmap='summer', filename=None, dpi=192, show=True):
         """Draw a Pnet
 
         Drawing is done using matplotlib
@@ -1105,8 +1105,12 @@ class Pnet(nx.MultiDiGraph):
         font_color : color, default 'black'
             color of text on node and edge labels,
             in any format supported by matplotlib
-        cmap : str, default 'viridis'
+        cmap : str, default 'summer'
             node colormap name, among supported by matplotlib
+        color : optional
+            color in matplotlib's format
+            'red, '#ffaacc', 0.4, (0.1,0,1) are all valid colors
+            if specified, will be used instead of cmap for node coloring
         filename : str, optional
             file name to save image to
             if None, image is not saved
@@ -1121,7 +1125,8 @@ class Pnet(nx.MultiDiGraph):
         matplotlib : python data visualisation package
         """
         fig, ax = plt.subplots(1)
-        cmap=plt.get_cmap(cmap)
+        if color is None:
+            cmap=plt.get_cmap(cmap)
         node_list = sorted(list(self.nodes))
         node_cmap = {node: i/len(node_list) for i, node in enumerate(node_list)}
 
@@ -1249,8 +1254,16 @@ class Pnet(nx.MultiDiGraph):
             arrow_offset = base_arrow_offset
 
             height = scale_y * node_visual_height(node)
-            col = cmap(node_cmap[node]); ec = cmap(1-node_cmap[node])
-            rect = mpatches.Rectangle(pos, scale_x, height, color=col, ec=ec)
+            if color is None:
+                col = cmap(self.length(end=node)/self.length())
+            else:
+                col = color
+
+            if ec is None:
+                ecol = col
+            else:
+                ecol = ec
+            rect = mpatches.Rectangle(pos, scale_x, height, color=col, ec=ecol)
             ax.add_patch(rect)
             label_center(pos[0], pos[1], scale_x, height, str(node))
 

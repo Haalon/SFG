@@ -3,22 +3,70 @@ from nltk import CFG
 from networkx.readwrite import json_graph
 
 import json
+import random as rnd
 import networkx as nx
 from pnet import Pnet
 from restore import *
 
-MAX_DEPTH = 7
-MAX_LENGTH = 10
+MAX_DEPTH = 8
+MAX_LENGTH = 20
 GRAMMAR = '''
-S -> 'S' A B | 's' C
-A -> 'A' A C | 'a'
-B -> 'b' | 'B' B A
-C -> 'C' B | 'c' 
+S -> '>' F
+F -> '*' V V | 'f' V
+V -> 'x' | '(' F ')' 
 '''
+# GRAMMAR = '''
+# S -> 'S' A B | 's' C
+# A -> 'A' A C | 'a'
+# B -> 'b' | 'B' B A
+# C -> 'C' B | 'c' 
+# '''
 
 grammar = CFG.fromstring(GRAMMAR)
 
 sents = [s for s in generate(grammar, depth=MAX_DEPTH) if len(s) <= MAX_LENGTH]
+
+# res = restore(sents, maxt=8, maxh=8)
+# minres = min(res, key=len)
+
+
+# for i in range(1, len(sents)):
+# 	print(f'Attempt with sample size {i}')
+# 	curr_sents = rnd.sample(sents, i)
+# 	res = restore(curr_sents)
+# 	minres = min(res, key=len)
+
+# 	if all(check_grammar(minres, s) for s in sents):
+# 		print(f'\n\nSuccess at i={i}\n')
+# 		for s in curr_sents:
+# 			print(''.join(s))
+# 		break
+
+sents = [
+	'>fx',
+	'>f(fx)',
+	'>f(f(fx))',
+	'>f(f(*xx))',
+	'>f(*x(fx))',
+	'>f(*xx)',
+	'>*(*x(fx))(*xx)',
+	'>*(*xx)(*(fx)x)',
+	'>*(*(fx)(fx))(*x(fx))',
+	'>*(*(fx)x)(*(fx)(fx))',
+	'>*(*(*xx)(fx))(*x(*xx))',
+	'>*(*(*xx)x)(*(fx)(*xx))',
+	'>*(fx)(fx)',
+	'>*(fx)(f(fx))',
+	'>*(fx)(*xx)',
+	'>*(fx)(*x(fx))',
+	'>*(fx)x',
+	'>*(f(fx))(*(*xx)x)',
+	'>*xx',
+	'>*x(*x(fx))',
+	'>*x(*xx)',
+	'>*x(f(fx))',
+	'>*x(fx)',
+]
 # sents = [
 # 	'#',
 # 	'aaca',
@@ -41,12 +89,29 @@ sents = [s for s in generate(grammar, depth=MAX_DEPTH) if len(s) <= MAX_LENGTH]
 # 	'a((a))babababaca'
 # ]
 
+# sents = [
+# 	'>*(fx)(*xx)',
+# 	'>*(fx)(*x(fx))',
+# 	'>*(fx)(fx)',
+# 	'>*(fx)(f(fx))',
+# 	'>*(fx)x',
+# 	'>*x(*xx)',
+# 	'>*x(*x(fx))',
+# 	'>*x(fx)',
+# 	'>*x(f(fx))',
+# 	'>*xx',
+# 	'>f(*xx)',
+# 	'>f(*x(fx))',
+# 	'>f(fx)',
+# 	'>f(f(fx))',
+# 	'>fx'
+# ]
+
 # p = Pnet.load('graph.json')
 # p1 = Pnet(['fae'])
 # p2= Pnet(['faac', 'fbbc'])
 # p2.factorize((0,-1))
-# res = restore(sents)
-# minres = min(res, key=len)
+
 # should be 3 3
 
 
