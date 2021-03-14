@@ -6,6 +6,24 @@ from functools import cmp_to_key
 from pnet import Pnet
 from utils import equivalence_partition
 
+def _cmp_grammar_simplicity(g1, g2):
+    if g1.count('\n') < g2.count('\n'):
+        return -1
+    elif g1.count('\n') > g2.count('\n'):
+        return 1
+
+    if g1.count('|') < g2.count('|'):
+        return -1
+    elif g1.count('|') > g2.count('|'):
+        return 1
+
+    if g1.count("'") < g2.count("'"):
+        return 1
+    elif g1.count("'") > g2.count("'"):
+        return -1
+
+    return 0
+
 
 def restore(sents, maxt=None, maxh=None):
     """Create grammars that can produce given sentences
@@ -31,14 +49,14 @@ def restore(sents, maxt=None, maxh=None):
 
     Returns
     -------
-    grammars : set of str
-        grammars that can produce given sentences
+    grammars : dict of str
+        grammar strings for every valid pair of t and h
     """
     maxlen = len(max(sents, key=len))
     maxt = maxt if maxt is not None else maxlen
     maxh = maxh if maxh is not None else maxlen
 
-    res = set()
+    res = {}
     for t,h in product(range(1, maxt+1), range(1, maxh+1)):
         p = Pnet(sents)
         net_transform(p, t, h)
@@ -47,7 +65,7 @@ def restore(sents, maxt=None, maxh=None):
         if all(check_grammar(g, s) for s in sents):
             print(f'Success with t={t}, h={h}')
             print(g, '\n')
-            res.add(g)
+            res[(t,h)] = g
         else:
             print(f'Fail with t={t}, h={h}')
 

@@ -7,6 +7,7 @@ import random as rnd
 import networkx as nx
 from pnet import Pnet
 from restore import *
+from grammar import *
 
 MAX_DEPTH = 8
 MAX_LENGTH = 20
