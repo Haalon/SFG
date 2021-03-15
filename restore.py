@@ -62,6 +62,8 @@ def restore(sents, maxt=None, maxh=None):
         net_transform(p, t, h)
         _, g = net_to_grammar(p, t)
 
+        g = CFG.fromstring(g)
+
         if all(check_grammar(g, s) for s in sents):
             print(f'Success with t={t}, h={h}')
             print(g, '\n')
@@ -71,7 +73,7 @@ def restore(sents, maxt=None, maxh=None):
 
     return res
 
-def check_grammar(grammar, sent):
+def check_grammar(g, sent):
     """Check if sentence can be produced by grammar
 
     Grammar syntax example:
@@ -84,7 +86,7 @@ def check_grammar(grammar, sent):
 
     Parameters
     ----------
-    grammar : str
+    g : nltk.CFG
         grammar to check
 
     sents: str
@@ -93,8 +95,11 @@ def check_grammar(grammar, sent):
     Returns
     -------
     bool
+
+    See Also
+    --------
+    CFG.grammar
     """
-    g = CFG.fromstring(grammar)
     parser = RecursiveDescentParser(g)
 
     try:
