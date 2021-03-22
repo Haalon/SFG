@@ -684,14 +684,25 @@ class Pnet(nx.MultiDiGraph):
         return True
 
 
-    def _compose_inplace(self, other, target_node, other_start=None, other_end=None):
+    def _compose_inplace(self, other, target_node):
+        
+
         new_start = self.next_node_id
         self.add_node(new_start)
         self.next_node_id += 1
 
-        for s,e,k in list(self.in_edges(target_node, keys=True)):
-            self.add_edge(s, new_start, key=k)
-            self.remove_edge(s,e,key=k)
+        if target_node == self.start:
+            for s,e,k in list(self.out_edges(target_node, keys=True)):
+                self.add_edge(new_start, e, key=k)
+                self.remove_edge(s,e,key=k)
+
+            target_node = new_start
+            new_start = self.start
+        else:
+            # note that outgoing edges are stll go from target_node 
+            for s,e,k in list(self.in_edges(target_node, keys=True)):
+                self.add_edge(s, new_start, key=k)
+                self.remove_edge(s,e,key=k)
 
         node_map = {n: n + self.next_node_id for n in other.nodes()}
         node_map[other.start] = new_start
@@ -700,6 +711,9 @@ class Pnet(nx.MultiDiGraph):
         copy = nx.relabel_nodes(other, node_map)
 
         res = nx.compose(self, copy)
+        res.next_node_id = 1 + max(node_map.values())
+        res.start = self.start
+        res.end = self.end
         self.__init__(res)
 
         return True
@@ -747,7 +761,8 @@ class Pnet(nx.MultiDiGraph):
         other_end = other_end if other_end is not None else other.end
 
         if self_start == self_end:
-            return self._compose_inplace(other, self_start, other_start, other_end)
+            copy = other.subcopy(other_start,other_end)
+            return self._compose_inplace(copy, self_start)
 
         net = Pnet(self)
 
@@ -802,6 +817,34 @@ class Pnet(nx.MultiDiGraph):
 
         self.__init__(net)
         return True
+
+    def sequence_join(self, *nets):
+        for net in nets:
+            self._compose_inplace(net, self.end)
+
+    def parallel_join(self, *nets):
+        res = Pnet(self)        
+        labels = {k for _,_,k in self.out_edges(self.start, keys=True)}
+
+        for net in nets:
+            new_labels = {k for _,_,k in net.out_edges(net.start, keys=True)}
+
+            if labels.intersection(new_labels):
+                raise ValueError("Nets with same starting symbols were given")
+
+            relabels = {n: n + res.next_node_id for n in net.nodes()}
+            relabels[net.start] = res.start
+            relabels[net.end] = res.end
+
+            copy = nx.relabel_nodes(net, relabels)
+            temp = nx.compose(copy, res)
+
+            temp.start = res.start
+            temp.end = res.end
+            temp.next_node_id = 1 + max(relabels.values())
+            res.__init__(temp)
+
+        self.__init__(res)
 
     def collapse(self, start=None, end=None):
         """Merge start and end nodes, and remove everything between them
