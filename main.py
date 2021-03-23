@@ -16,6 +16,12 @@ S -> '>' F
 F -> '*' V V | 'f' V
 V -> 'x' | '(' F ')' 
 '''
+
+G = """
+S -> '>' F V
+F -> '*' V | 'f'
+V -> 'x' | '(' F V ')' 
+"""
 # GRAMMAR = '''
 # S -> 'S' A B | 's' C
 # A -> 'A' A C | 'a'
@@ -24,6 +30,8 @@ V -> 'x' | '(' F ')'
 # '''
 
 grammar = CFG.fromstring(GRAMMAR)
+
+g = CFG.fromstring(G)
 
 sents = [s for s in generate(grammar, depth=MAX_DEPTH) if len(s) <= MAX_LENGTH]
 

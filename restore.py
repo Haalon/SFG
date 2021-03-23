@@ -1,10 +1,11 @@
 import networkx as nx
 from nltk.parse.recursivedescent import RecursiveDescentParser
 from nltk import CFG
-from itertools import product
+import itertools
 from functools import cmp_to_key
 from pnet import Pnet
 from utils import equivalence_partition
+from grammar import *
 
 def _cmp_grammar_simplicity(g1, g2):
     if g1.count('\n') < g2.count('\n'):
@@ -57,7 +58,7 @@ def restore(sents, maxt=None, maxh=None):
     maxh = maxh if maxh is not None else maxlen
 
     res = {}
-    for t,h in product(range(1, maxt+1), range(1, maxh+1)):
+    for t,h in itertools.product(range(1, maxt+1), range(1, maxh+1)):
         p = Pnet(sents)
         net_transform(p, t, h)
         _, g = net_to_grammar(p, t)
@@ -228,6 +229,10 @@ def net_to_grammar(net, t=None):
         division parameter,
         used in similarity checks
 
+    Returns
+    -------
+    (start, grammar) :
+        starting symbol and a grammar in a string format
 
     See Also
     --------
@@ -290,3 +295,90 @@ def net_to_grammar(net, t=None):
                 queue.append(child)
 
     return S, '\n'.join(rules)
+
+def _generate_sents(g, target, maxlen):
+    res = set()
+    for prod in g.productions(target):
+        sents = list(generate(g, prod.rhs(), maxlen=maxlen))
+
+        if not sents:
+            return set()
+
+        res.update(tuple(s) for s in sents)
+
+    return res
+
+def _minimal_different_sents(g):
+    def differs(sset, list):
+        count = 0
+        for s in list:
+            if not sset.difference(s):
+                count+=1
+
+            if count > 1:
+                return False
+
+        return True
+
+    queue = nonterminals(g)
+    res = {}
+
+    maxlen = 1
+    while queue:
+        sets = {nont: _generate_sents(g, nont, maxlen) for nont in queue}
+
+        for nont, sents in sets.items():
+            if sents and differs(sents, sets.values()):
+                res[nont] = sents
+                queue.remove(nont)
+
+        maxlen += 1
+
+    return res
+
+def min_pnet(g):
+    """Generate a minimal Pnet that can be resored back to grammar
+
+    Also calculates `t` and `h` values for a grammar
+    These values are properties of the grammar, and used in restoration
+
+    Parameters
+    ----------
+    g : nltk.CFG
+
+    Returns
+    -------
+    net : Pnet
+
+    See Also
+    --------
+    pnet.Pnet, nltk.grammar
+    """   
+    nont_sents = _minimal_different_sents(g)
+
+    t = len(min(s for sents in nont_sents.values for s in sents, key = len))
+    nets = {nont: Pnet(sents) for nont,sents in nont_sents.items()}
+    start = g.start()
+
+    res = Pnet(prod.rhs() for prod in g.productions(start))
+    res.graph['t'] = t
+    completed.add(start)
+    change = True
+
+    while change:
+        change = False
+        # res.draw()
+
+        for (s,e,k) in list(res.edges(keys=True)):
+            if is_nonterminal(k):
+                if k in completed:
+                    res.remove_edge(s,e,k)
+                    res.compose(nets[k], self_start=s, self_end=e)
+                else:
+                    change = True
+                    completed.add(k)
+                    temp = Pnet(prod.rhs() for prod in g.productions(k))
+                    res.remove_edge(s,e,k)
+                    res.compose(temp, self_start=s, self_end=e)
+
+    return res
