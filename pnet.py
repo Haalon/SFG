@@ -818,15 +818,21 @@ class Pnet(nx.MultiDiGraph):
         self.__init__(net)
         return True
 
-    def sequence_join(self, *nets):
-        for net in nets:
-            self._compose_inplace(net, self.end)
+    @staticmethod
+    def sequence_join(start, *nets):
 
-    def parallel_join(self, *nets):
-        res = Pnet(self)        
-        labels = {k for _,_,k in self.out_edges(self.start, keys=True)}
+        res  = Pnet(start)
+        for net in nets[1:]:
+            res._compose_inplace(net, res.end)
 
-        for net in nets:
+        return res
+
+    @staticmethod
+    def parallel_join(start, *nets):
+        res = Pnet(start)        
+        labels = {k for _,_,k in res.out_edges(res.start, keys=True)}
+
+        for net in nets[1:]:
             new_labels = {k for _,_,k in net.out_edges(net.start, keys=True)}
 
             if labels.intersection(new_labels):
@@ -844,7 +850,7 @@ class Pnet(nx.MultiDiGraph):
             temp.next_node_id = 1 + max(relabels.values())
             res.__init__(temp)
 
-        self.__init__(res)
+        return res
 
     def collapse(self, start=None, end=None):
         """Merge start and end nodes, and remove everything between them
