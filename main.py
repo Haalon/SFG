@@ -22,16 +22,17 @@ S -> '>' F V
 F -> '*' V | 'f'
 V -> 'x' | '(' F V ')' 
 """
-# GRAMMAR = '''
-# S -> 'S' A B | 's' C
-# A -> 'A' A C | 'a'
-# B -> 'b' | 'B' B A
-# C -> 'C' B | 'c' 
-# '''
+G2 = '''
+S -> 'S' A B | 's' C
+A -> 'A' A C | 'a'
+B -> 'b' | 'B' B A
+C -> 'C' B | 'c' 
+'''
 
 grammar = CFG.fromstring(GRAMMAR)
 
 g = CFG.fromstring(G)
+g2 = CFG.fromstring(G2)
 
 sents = [s for s in generate(grammar, depth=MAX_DEPTH) if len(s) <= MAX_LENGTH]
 

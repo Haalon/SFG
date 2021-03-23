@@ -685,8 +685,6 @@ class Pnet(nx.MultiDiGraph):
 
 
     def _compose_inplace(self, other, target_node):
-        
-
         new_start = self.next_node_id
         self.add_node(new_start)
         self.next_node_id += 1
@@ -1050,9 +1048,9 @@ class Pnet(nx.MultiDiGraph):
 
         Tree has an additional labels on nodes and egdes
 
-        For nodes, label 'inner' contains tuple with keys of edges from start of the subnet,
+        For nodes, label 'inner' contains tuple with keys of edges from starting node of the subnet,
         that are a part of this subnet
-        (some start node's outgoing edges may be not a part of this subnet)
+        (some start node's outgoing edges may be not a part of the subnet)
 
         For edges, label 'keys' contains tuple with keys of edges from start of the parent subnet,
         that lead to the start node of child subnet

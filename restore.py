@@ -337,10 +337,12 @@ def _minimal_different_sents(g):
     return res
 
 def min_pnet(g):
-    """Generate a minimal Pnet that can be resored back to grammar
+    """Generate a minimal Pnet that can be restored back to grammar
 
     Also calculates `t` and `h` values for a grammar
     These values are properties of the grammar, and used in restoration
+    
+    They are accessible via `graph` field of the Pnet
 
     Parameters
     ----------
@@ -356,13 +358,14 @@ def min_pnet(g):
     """   
     nont_sents = _minimal_different_sents(g)
 
-    t = len(min(s for sents in nont_sents.values for s in sents, key = len))
+    t = len(max((s for sents in nont_sents.values() for s in sents), key = len))
     nets = {nont: Pnet(sents) for nont,sents in nont_sents.items()}
     start = g.start()
 
     res = Pnet(prod.rhs() for prod in g.productions(start))
     res.graph['t'] = t
-    completed.add(start)
+
+    completed = {start}
     change = True
 
     while change:
@@ -380,5 +383,19 @@ def min_pnet(g):
                     temp = Pnet(prod.rhs() for prod in g.productions(k))
                     res.remove_edge(s,e,k)
                     res.compose(temp, self_start=s, self_end=e)
+
+    tree = res.subnet_tree()
+
+    h = 0
+    for subnet in tree.nodes():
+        parent_start = subnet[0]
+        for child_net in tree.successors(subnet):
+            child_start = child_net[0]
+
+            pathlen = len(max(nx.all_simple_edge_paths(res, parent_start,  child_start), key=len))
+            h = max(h, pathlen)
+
+    res.graph['h'] = h
+
 
     return res
