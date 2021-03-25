@@ -1,8 +1,24 @@
+"""Additional, useful functions that work on context-free grammars from `nltk`"""
 from nltk import CFG, Nonterminal, Production
 from nltk.grammar import is_nonterminal, is_terminal
 import itertools
 import sys
 
+__all__ = [
+    'terminals',
+    'nonterminals',
+    'children',
+    'endings',
+    'remove_production',
+    'remove_nonterminal',
+    'add_production',
+    'is_separated',
+    'unreachable',
+    'useless',
+    'check_canonical',
+    'apply_production',
+    'generate'
+]
 
 def terminals(g):
     """Get set of grammar's terminals

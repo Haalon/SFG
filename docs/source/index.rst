@@ -7,11 +7,10 @@ Welcome to Pnet's documentation!
 ================================
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 3
 
-   restore
-   pnet
-   utils
+
+   SFG
 
 
 

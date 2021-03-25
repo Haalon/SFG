@@ -1,11 +1,21 @@
+"""Functions, related to grammar induction"""
 import networkx as nx
 from nltk.parse.recursivedescent import RecursiveDescentParser
 from nltk import CFG
 import itertools
 from functools import cmp_to_key
-from pnet import Pnet
-from utils import equivalence_partition
-from grammar import *
+
+from SFG.pnet import Pnet
+from SFG.utils import equivalence_partition
+from SFG.grammar import *
+
+__all__ = [
+    "restore",
+    "restore_all",
+    "net_transform",
+    "net_to_grammar",
+    "min_pnet"
+]
 
 def _cmp_grammar_simplicity(g1, g2):
     if g1.count('\n') < g2.count('\n'):
@@ -25,9 +35,38 @@ def _cmp_grammar_simplicity(g1, g2):
 
     return 0
 
+def restore(sents, mint=None, maxt=None, minh=None, maxh=None):
+    """Get best infered grammar
 
-def restore(sents, maxt=None, maxh=None):
-    """Create grammars that can produce given sentences
+    Parameters
+    ----------
+    sents: collection of str
+        sentences to use in restoration
+    mint: int
+        check up values of t starting from this value
+
+    maxt: int
+        check up values of t up to this value
+    
+    minh: int
+        check up values of h starting from this value
+
+    maxh: int
+        check up values of h up to this value
+
+    Returns
+    -------
+    grammar : nltk.CFG
+    """
+    res = restore_all(sents, mint,maxt, minh, maxh)
+    simplest = min(res.values(), key=cmp_to_key(_cmp_grammar_simplicity))
+
+    return CFG.fromstring(simplest)
+
+def restore_all(sents, mint=None, maxt=None, minh=None, maxh=None):
+    """Get all infered grammars
+
+    For all combinations of parameters `t` and `h` there may be a different grammars
 
     Grammar syntax example:
 
@@ -41,12 +80,17 @@ def restore(sents, maxt=None, maxh=None):
     ----------
     sents: collection of str
         sentences to use in restoration
+    mint: int
+        check up values of t starting from this value
 
     maxt: int
-        check up values of t up to this parameter
+        check up values of t up to this value
+    
+    minh: int
+        check up values of h starting from this value
 
     maxh: int
-        check up values of h up to this parameter
+        check up values of h up to this value
 
     Returns
     -------
@@ -54,11 +98,14 @@ def restore(sents, maxt=None, maxh=None):
         grammar strings for every valid pair of t and h
     """
     maxlen = len(max(sents, key=len))
+    mint = mint if mint is not None else 1
+    minh = minh if minh is not None else 1
+
     maxt = maxt if maxt is not None else maxlen
     maxh = maxh if maxh is not None else maxlen
 
     res = {}
-    for t,h in itertools.product(range(1, maxt+1), range(1, maxh+1)):
+    for t,h in itertools.product(range(mint, maxt+1), range(minh, maxh+1)):
         p = Pnet(sents)
         p = net_transform(p, t, h)
         _, g_str = net_to_grammar(p, t)

@@ -1,3 +1,5 @@
+"""Pnet is class of a parallel-series prefix network, based on networkx' MultiDiGraph
+Used in induction algorithm and grammar analysis"""
 import networkx as nx
 from networkx.readwrite import json_graph
 import matplotlib.pyplot as plt
@@ -7,7 +9,9 @@ import json
 import math 
 import logging
 
-from utils import hierarchy_pos, merge_nodes_and_keys, equivalence_partition
+from SFG.utils import hierarchy_pos, merge_nodes_and_keys, equivalence_partition
+
+__all__ = ['Pnet']
 
 class Pnet(nx.MultiDiGraph):
     """Pnet - a hybrid between Parallel-series network and prefix tree
@@ -635,7 +639,7 @@ class Pnet(nx.MultiDiGraph):
         if not valid_close:
             return None
 
-        print(close_nodes, deep_nodes, classes, partition, valid_close, valid_deep, '\n', sep='\n')
+        # print(close_nodes, deep_nodes, classes, partition, valid_close, valid_deep, '\n', sep='\n')
 
         # if many valid sets, select ones with smallest total amount of elements
         valids = zip(valid_close, valid_deep)
