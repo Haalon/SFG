@@ -54,7 +54,7 @@ from SFG.pnet import Pnet
 p = Pnet(sents)
 p.draw() # parallel-series net drawing, using matplotlib primitives
 ```
-<img src="examples/example0.png" alt="caer.resize()" />
+<img src="examples/example0.png"/>
 
 
 
