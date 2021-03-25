@@ -1,4 +1,8 @@
-# SFG - Separated grammar research package
+# SFG
+
+Separated grammar research package
+
+## Introduction
 
 This package is centered around separated grammars and their inference/induction/restoration
 
