@@ -2,6 +2,7 @@
 import networkx as nx
 from nltk.parse.recursivedescent import RecursiveDescentParser
 from nltk import CFG
+from nltk.grammar import is_nonterminal
 import itertools
 from functools import cmp_to_key
 
@@ -421,13 +422,13 @@ def min_pnet(g):
             if is_nonterminal(k):
                 if k in completed:
                     res.remove_edge(s,e,k)
-                    res.compose(nets[k], self_start=s, self_end=e)
+                    res.insert(nets[k], s, e)
                 else:
                     change = True
                     completed.add(k)
                     temp = Pnet(prod.rhs() for prod in g.productions(k))
                     res.remove_edge(s,e,k)
-                    res.compose(temp, self_start=s, self_end=e)
+                    res.insert(temp, s, e)
 
     tree = res.subnet_tree()
 
