@@ -502,7 +502,7 @@ class Pnet(nx.MultiDiGraph):
 
         return False if o_sents.symmetric_difference(s_sents) else True
 
-    def factorize(self, subnet):
+    def factorize(self, subnet, copy=True):
         """Attempt to factorize subnet
 
         Merge ancestors of given node (or subnet's end node),
@@ -514,27 +514,32 @@ class Pnet(nx.MultiDiGraph):
         subnet : (int, int)
             subnet to attempt factorization
 
+        copy : bool, default True
+            if False, modifies the object itself, 
+            instead of creating a new one
+
         Returns
         -------
-        success : bool
-            True if factorization was sucessful
-            False if it cannot be done
+        res : Pnet or None
+            new Pnet if factorization was sucessful
+            None if it cannot be done
         """
 
         s,e = subnet
+        res = Pnet(self) if copy else self
 
-        if self.in_degree(e) < 2:
-            return False
+        if res.in_degree(e) < 2:
+            return None
 
-        in_subnet_edges = [(prev, curr, k) for prev, curr, k in self.in_edges(e, keys=True) if nx.has_path(self, s, prev)]
+        in_subnet_edges = [(prev, curr, k) for prev, curr, k in res.in_edges(e, keys=True) if nx.has_path(res, s, prev)]
 
         first_prev,_,key = in_subnet_edges[0]
 
-        if all(k==key and self.is_transit_node(prev) for prev,_,k in in_subnet_edges):
-            merge_nodes_and_keys(self, first_prev, [prev for prev,_,_ in in_subnet_edges])
-            return self.factorize((s, first_prev)) or True
+        if all(k==key and res.is_transit_node(prev) for prev,_,k in in_subnet_edges):
+            merge_nodes_and_keys(res, first_prev, [prev for prev,_,_ in in_subnet_edges])
+            return res.factorize((s, first_prev), copy=False) or res
 
-        return False
+        return None
 
     def divide(self, subnet, subnet_tree=None, t=None, h=None):
         """Attempt to divide subnet
@@ -628,7 +633,7 @@ class Pnet(nx.MultiDiGraph):
                 valid_deep.append(deep_part)
 
         if not valid_close:
-            return False
+            return None
 
         print(close_nodes, deep_nodes, classes, partition, valid_close, valid_deep, '\n', sep='\n')
 
@@ -636,36 +641,22 @@ class Pnet(nx.MultiDiGraph):
         valids = zip(valid_close, valid_deep)
         valid_close, valid_deep = min(valids, key=lambda c_d: len(c_d[0]) + len(c_d[1]))
 
-        first_node = next(iter(valid_close))
+        first_node = valid_close.pop()
         net = Pnet(self)
 
-        # delete deep nodes (>h)
-        for node in valid_deep:
-            if node in net.nodes():
-                net.remove_node_recursive(node)
-
-        # merge close nodes (<=h)
         left_net = net.subcopy(s, first_node)
+        right_net = net.subcopy(first_node, e)
+
         for node in valid_close:
-            if node != first_node:
-                success = net.compose(net, self_start=first_node, self_end=e, other_start=node, other_end=e)
-                if not success:
-                    return False
+            left_net = left_net.compose(net, other_start=s, other_end=node)
+            right_net = right_net.compose(net, other_start=node, other_end=e)
+            if right_net is None:
+                return None
 
-                tmp_net = net.subcopy(s, node)
-                if node in net.nodes():
-                    net.remove_node_recursive(node)
+        new_subnet = Pnet.sequence_join(left_net, right_net)
+        net.replace(new_subnet, s, e)
 
-                success = left_net.compose(tmp_net, self_start=s, self_end=first_node)
-                if not success:
-                    return False
-
-        success = net.compose(left_net, self_start=s, self_end=first_node)
-        if not success:
-            return False
-
-        self.__init__(net)
-        return True
+        return net
 
     def is_valid(self):
         """Checks if Pnets structure is valid
@@ -684,7 +675,10 @@ class Pnet(nx.MultiDiGraph):
         return True
 
 
-    def _compose_inplace(self, other, target_node):
+    def _insert_inplace(self, other, target_node):
+        """Here we split the node in two, and insert a net between them
+            Nodes are splitted in such a way, that start and end nodes do not change
+        """
         new_start = self.next_node_id
         self.add_node(new_start)
         self.next_node_id += 1
@@ -702,19 +696,85 @@ class Pnet(nx.MultiDiGraph):
                 self.add_edge(s, new_start, key=k)
                 self.remove_edge(s,e,key=k)
 
+        return self.insert(other, new_start, target_node)
+
+    def insert(self, other, start=None, end=None):
+        """Insert a net between two nodes
+
+        Modifies the existing Pnet
+
+        Be sure to check if nets do not have the same keys at the start nodes
+        If they do - insertion will rasie an error
+
+        Parameters
+        ----------
+        other : Pnet
+            other Pnet to insert
+        start : int, default self.start
+            start node in this Pnet for insertion         
+        end : int, default self.end
+            end node in this Pnet for insertion
+
+        Returns
+        -------
+        self : Pnet
+        
+        Raises
+        ------
+        ValueError
+            If there is a key collision netween nets
+
+        """
+        start = start if start is not None else self.start
+        end = end if end is not None else self.end
+
+        if start == end:
+            return self._insert_inplace(other, start)
+
+        self_keys = {k for _,_,k in self.out_edges(start, keys=True)}
+        other_keys = {k for _,_,k in other.out_edges(other.start, keys=True)}
+
+        if self_keys.intersection(other_keys):
+            raise ValueError("Nets with same starting symbols were given")
+
         node_map = {n: n + self.next_node_id for n in other.nodes()}
-        node_map[other.start] = new_start
-        node_map[other.end] = target_node
+        node_map[other.start] = start
+        node_map[other.end] = end
 
         copy = nx.relabel_nodes(other, node_map)
 
-        res = nx.compose(self, copy)
-        res.next_node_id = 1 + max(node_map.values())
-        res.start = self.start
-        res.end = self.end
-        self.__init__(res)
+        for s,e,k in copy.edges(keys=True):
+            self.add_edge(s,e,k)
 
-        return True
+        self.next_node_id = 1 + max(node_map.values())
+
+        return self
+
+    def replace(self, other, start=None, end=None):
+        """Replaces everything between two nodes with a given net
+
+        There must be a path between start and end node
+
+        Parameters
+        ----------
+        other : Pnet
+            net to replace with
+        start : int, default self.start
+            starting node            
+        end : int, default self.end
+            end node
+
+        See Also
+        --------
+        between_nodes
+        """
+        start = start if start is not None else self.start
+        end = end if end is not None else self.end
+
+        dead_nodes = self.between_nodes(start, end, edge_cases=False)
+        self.remove_nodes_from(dead_nodes)
+
+        self.insert(other, start, end)
 
     def compose(self, other, self_start=None, self_end=None, other_start=None, other_end=None):
         """Compose two Pnets
@@ -746,11 +806,11 @@ class Pnet(nx.MultiDiGraph):
         Returns
         -------
         bool : 
-            True, if composition was successful
+            new Pnet, if composition was successful
             
             OR
 
-            False, if composition cannot be done
+            None, if composition cannot be done
         """
         self_start = self_start if self_start is not None else self.start
         self_end = self_end if self_end is not None else self.end
@@ -758,11 +818,12 @@ class Pnet(nx.MultiDiGraph):
         other_start = other_start if other_start is not None else other.start
         other_end = other_end if other_end is not None else other.end
 
+        net = Pnet(self)
+
         if self_start == self_end:
             copy = other.subcopy(other_start,other_end)
-            return self._compose_inplace(copy, self_start)
+            return net._insert_inplace(copy, self_start)
 
-        net = Pnet(self)
 
         other_to_self = {other_start: self_start, other_end: self_end}
         new_nodes = set()
@@ -797,13 +858,13 @@ class Pnet(nx.MultiDiGraph):
                         merge_nodes_and_keys(net, expected_s_e, [actual_s_e])
                         other_to_self[o_e] = expected_s_e
                     else:
-                        return False
+                        return None
 
                 s_e = other_to_self[o_e]
 
                 # 2 or more other nodes for 1 self node
                 if len([other_node for other_node,self_node in other_to_self.items() if self_node==s_e]) > 1:
-                    return False
+                    return None
 
                 net.add_edge(s_s, s_e, key)
 
@@ -811,72 +872,26 @@ class Pnet(nx.MultiDiGraph):
         # currently it is checked after and not during the composition
         # which is not very efficient
         if not net.is_valid():
-            return False
+            return None
 
-        self.__init__(net)
-        return True
+        return net
 
     @staticmethod
     def sequence_join(start, *nets):
-
-        res  = Pnet(start)
-        for net in nets[1:]:
-            res._compose_inplace(net, res.end)
+        res = Pnet(start)
+        for net in nets:
+            res._insert_inplace(net, res.end)
 
         return res
 
     @staticmethod
     def parallel_join(start, *nets):
         res = Pnet(start)        
-        labels = {k for _,_,k in res.out_edges(res.start, keys=True)}
 
-        for net in nets[1:]:
-            new_labels = {k for _,_,k in net.out_edges(net.start, keys=True)}
+        for net in nets:
+            res.insert(net)
 
-            if labels.intersection(new_labels):
-                raise ValueError("Nets with same starting symbols were given")
-
-            relabels = {n: n + res.next_node_id for n in net.nodes()}
-            relabels[net.start] = res.start
-            relabels[net.end] = res.end
-
-            copy = nx.relabel_nodes(net, relabels)
-            temp = nx.compose(copy, res)
-
-            temp.start = res.start
-            temp.end = res.end
-            temp.next_node_id = 1 + max(relabels.values())
-            res.__init__(temp)
-
-        return res
-
-    def collapse(self, start=None, end=None):
-        """Merge start and end nodes, and remove everything between them
-
-        There must be a path between start and end node
-
-        Parameters
-        ----------
-        start : int, default self.start
-            starting node            
-        end : int, default self.end
-            end node
-
-        See Also
-        --------
-        between_nodes
-        """
-        start = start if start is not None else self.start
-        end = end if end is not None else self.end
-
-        dead_nodes = self.between_nodes(  start, end, edge_cases=False)
-        self.remove_nodes_from(dead_nodes)
-
-        merge_nodes_and_keys(self, end, [start])
-
-        while self.has_edge(end, end):
-            self.remove_edge(end, end)
-        
+        return res        
 
     def subcopy(self, start=None, end=None):
         """Make a new Pnet from part of a current one

@@ -60,15 +60,15 @@ def restore(sents, maxt=None, maxh=None):
     res = {}
     for t,h in itertools.product(range(1, maxt+1), range(1, maxh+1)):
         p = Pnet(sents)
-        net_transform(p, t, h)
-        _, g = net_to_grammar(p, t)
+        p = net_transform(p, t, h)
+        _, g_str = net_to_grammar(p, t)
 
-        g = CFG.fromstring(g)
+        g = CFG.fromstring(g_str)
 
         if all(check_grammar(g, s) for s in sents):
             print(f'Success with t={t}, h={h}')
-            print(g, '\n')
-            res[(t,h)] = g
+            print(g_str, '\n')
+            res[(t,h)] = g_str
         else:
             print(f'Fail with t={t}, h={h}')
 
@@ -124,25 +124,24 @@ def _net_transform_step(net, step_type='factorization', t=None, h=None):
         flag = False
         for subnet in queue:
             if step_type == 'factorization':
-                success = net.factorize(subnet)
+                res = net.factorize(subnet)
             elif step_type == 'division':
-                success = net.divide(subnet, tree, t, h)
+                res = net.divide(subnet, tree, t, h)
             else:
                 raise ValueError
 
-            flag = flag or success
-            if success:
+            flag = flag or res
+            if res:
+                net = res
                 print(f'\tSuccess {step_type} of {subnet} ({i})')
-            # else:
-            #     print(f'\tFailed {step_type} of {subnet} ({i})')
 
         if flag:
-            return True
+            return net
         i += 1
 
         queue = nx.descendants_at_distance(tree, root, i)
 
-    return False
+    return None
 
 
 def net_transform(net, t=None, h=None):
@@ -167,15 +166,15 @@ def net_transform(net, t=None, h=None):
     --------
     pnet.Pnet, pnet.Pnet.divide, restore
     """
-    flag = True
-    i = 0
-    while flag:
-        # net.draw(font_size = 50, filename=f'algo{i}.png')
-        i+=1
-        flag = _net_transform_step(net, 'factorization',t,h)
-        if flag:
+    res = net
+    while res:
+        net = res
+        res = _net_transform_step(net, 'factorization',t,h)
+        if res:
             continue
-        flag = _net_transform_step(net, 'division',t,h)
+        res = _net_transform_step(net, 'division',t,h)
+
+    return net
 
 
 def _subnet_to_rule(net, subnet, subnet_tree, non_terms):
@@ -370,7 +369,6 @@ def min_pnet(g):
 
     while change:
         change = False
-        # res.draw()
 
         for (s,e,k) in list(res.edges(keys=True)):
             if is_nonterminal(k):
