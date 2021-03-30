@@ -504,7 +504,16 @@ class Pnet(nx.MultiDiGraph):
 
         o_sents = set(tuple(s) for s in other.sents(other_start, other_end, cutoff=t))
 
-        return False if o_sents.symmetric_difference(s_sents) else True
+        if not all(any(s[0] == k for s in o_sents) for _, _, k in other.out_edges(other_start, keys=True)):
+            return False
+
+        common = s_sents.intersection(o_sents)
+
+        # o_sents is in s_sents OR s_sents is in o_sents
+        if len(common) == len(o_sents) or len(common) == len(s_sents):
+            return True
+
+        return False
 
     def factorize(self, subnet, copy=True):
         """Attempt to factorize subnet
