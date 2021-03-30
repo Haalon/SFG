@@ -8,7 +8,7 @@ from functools import cmp_to_key
 
 from SFG.pnet import Pnet
 from SFG.utils import equivalence_partition
-from SFG.grammar import *
+from SFG.grammar import nonterminals, generate
 
 __all__ = [
     "restore",
@@ -17,6 +17,7 @@ __all__ = [
     "net_to_grammar",
     "min_pnet"
 ]
+
 
 def _cmp_grammar_simplicity(g1, g2):
     if g1.count('\n') < g2.count('\n'):
@@ -36,6 +37,7 @@ def _cmp_grammar_simplicity(g1, g2):
 
     return 0
 
+
 def restore(sents, mint=None, maxt=None, minh=None, maxh=None):
     """Get best infered grammar
 
@@ -48,7 +50,7 @@ def restore(sents, mint=None, maxt=None, minh=None, maxh=None):
 
     maxt: int
         check up values of t up to this value
-    
+
     minh: int
         check up values of h starting from this value
 
@@ -59,10 +61,11 @@ def restore(sents, mint=None, maxt=None, minh=None, maxh=None):
     -------
     grammar : nltk.CFG
     """
-    res = restore_all(sents, mint,maxt, minh, maxh)
+    res = restore_all(sents, mint, maxt, minh, maxh)
     simplest = min(res.values(), key=cmp_to_key(_cmp_grammar_simplicity))
 
     return CFG.fromstring(simplest)
+
 
 def restore_all(sents, mint=None, maxt=None, minh=None, maxh=None):
     """Get all infered grammars
@@ -86,7 +89,7 @@ def restore_all(sents, mint=None, maxt=None, minh=None, maxh=None):
 
     maxt: int
         check up values of t up to this value
-    
+
     minh: int
         check up values of h starting from this value
 
@@ -106,7 +109,7 @@ def restore_all(sents, mint=None, maxt=None, minh=None, maxh=None):
     maxh = maxh if maxh is not None else maxlen
 
     res = {}
-    for t,h in itertools.product(range(mint, maxt+1), range(minh, maxh+1)):
+    for t, h in itertools.product(range(mint, maxt + 1), range(minh, maxh + 1)):
         p = Pnet(sents)
         p = net_transform(p, t, h)
         _, g_str = net_to_grammar(p, t)
@@ -116,11 +119,12 @@ def restore_all(sents, mint=None, maxt=None, minh=None, maxh=None):
         if all(check_grammar(g, s) for s in sents):
             print(f'Success with t={t}, h={h}')
             print(g_str, '\n')
-            res[(t,h)] = g_str
+            res[(t, h)] = g_str
         else:
             print(f'Fail with t={t}, h={h}')
 
     return res
+
 
 def check_grammar(g, sent):
     """Check if sentence can be produced by grammar
@@ -160,10 +164,11 @@ def check_grammar(g, sent):
 
     return True
 
+
 def _net_transform_step(net, step_type='factorization', t=None, h=None):
     tree = net.subnet_tree()
     root = (net.start, net.end)
-    
+
     i = 0
     queue = [root]
 
@@ -217,24 +222,23 @@ def net_transform(net, t=None, h=None):
     res = net
     while res:
         net = res
-        res = _net_transform_step(net, 'factorization',t,h)
+        res = _net_transform_step(net, 'factorization', t, h)
         if res:
             continue
-        res = _net_transform_step(net, 'division',t,h)
+        res = _net_transform_step(net, 'division', t, h)
 
     return net
 
 
 def _subnet_to_rule(net, subnet, subnet_tree, non_terms):
     sub_children = list(subnet_tree.successors(subnet))
-    
+
     s_to_e = {}
-    for s,e in sub_children:
+    for s, e in sub_children:
         if s not in s_to_e:
             s_to_e[s] = [e]
         else:
             s_to_e[s].append(e)
-
 
     paths = nx.all_simple_edge_paths(net, subnet[0], subnet[1])
     res = set()
@@ -242,7 +246,7 @@ def _subnet_to_rule(net, subnet, subnet_tree, non_terms):
     for path in paths:
         subnet_s = None
         variant = ''
-        for s,e,k in path:
+        for s, e, k in path:
             if subnet_s is not None and s in s_to_e[subnet_s]:
                 variant += ' ' + non_terms[(subnet_s, s)]
                 subnet_s = None
@@ -253,7 +257,7 @@ def _subnet_to_rule(net, subnet, subnet_tree, non_terms):
             if subnet_s is not None:
                 continue
 
-            variant +=  ' ' + f"'{k}'"
+            variant += ' ' + f"'{k}'"
 
         # if child subnet ends on the same node as parent
         if subnet_s is not None:
@@ -263,6 +267,7 @@ def _subnet_to_rule(net, subnet, subnet_tree, non_terms):
 
     rule = non_terms[subnet] + ' ->' + ' |'.join(res)
     return rule
+
 
 def net_to_grammar(net, t=None):
     """Restore a grammar that corresponds to a given Pnet
@@ -284,11 +289,11 @@ def net_to_grammar(net, t=None):
     See Also
     --------
     pnet.Pnet, restore
-    """   
+    """
     def subnet_eqivalence(net1, net2):
         s1, e1 = net1
         s2, e2 = net2
-        return net.similarity(net,s1,e1,s2,e2,t=t)
+        return net.similarity(net, s1, e1, s2, e2, t=t)
 
     subnet_tree = net.subnet_tree()
     classes, partition = equivalence_partition(subnet_tree.nodes, subnet_eqivalence)
@@ -314,11 +319,11 @@ def net_to_grammar(net, t=None):
         else:
             return 1
 
-    # nets are ordered so that Pnets with the same structure but different edge order 
+    # nets are ordered so that Pnets with the same structure but different edge order
     # will produce grammars with same order of rules and alternatives
     ordered = sorted(subnet_tree.nodes, key=cmp_to_key(subnet_order))
     non_terms = {net: str(classes.index(partition[net])) for net in ordered}
-    
+
     queue = [root]
 
     S = non_terms[root]
@@ -343,6 +348,7 @@ def net_to_grammar(net, t=None):
 
     return S, '\n'.join(rules)
 
+
 def _generate_sents(g, target, maxlen):
     res = set()
     for prod in g.productions(target):
@@ -355,12 +361,13 @@ def _generate_sents(g, target, maxlen):
 
     return res
 
+
 def _minimal_different_sents(g):
     def differs(sset, list):
         count = 0
         for s in list:
             if not sset.difference(s):
-                count+=1
+                count += 1
 
             if count > 1:
                 return False
@@ -383,12 +390,13 @@ def _minimal_different_sents(g):
 
     return res
 
+
 def min_pnet(g):
     """Generate a minimal Pnet that can be restored back to grammar
 
     Also calculates `t` and `h` values for a grammar
     These values are properties of the grammar, and used in restoration
-    
+
     They are accessible via `graph` field of the Pnet
 
     Parameters
@@ -402,11 +410,11 @@ def min_pnet(g):
     See Also
     --------
     pnet.Pnet, nltk.grammar
-    """   
+    """
     nont_sents = _minimal_different_sents(g)
 
-    t = len(max((s for sents in nont_sents.values() for s in sents), key = len))
-    nets = {nont: Pnet(sents) for nont,sents in nont_sents.items()}
+    t = len(max((s for sents in nont_sents.values() for s in sents), key=len))
+    nets = {nont: Pnet(sents) for nont, sents in nont_sents.items()}
     start = g.start()
 
     res = Pnet(prod.rhs() for prod in g.productions(start))
@@ -418,16 +426,16 @@ def min_pnet(g):
     while change:
         change = False
 
-        for (s,e,k) in list(res.edges(keys=True)):
+        for (s, e, k) in list(res.edges(keys=True)):
             if is_nonterminal(k):
                 if k in completed:
-                    res.remove_edge(s,e,k)
+                    res.remove_edge(s, e, k)
                     res.insert(nets[k], s, e)
                 else:
                     change = True
                     completed.add(k)
                     temp = Pnet(prod.rhs() for prod in g.productions(k))
-                    res.remove_edge(s,e,k)
+                    res.remove_edge(s, e, k)
                     res.insert(temp, s, e)
 
     tree = res.subnet_tree()
@@ -438,10 +446,9 @@ def min_pnet(g):
         for child_net in tree.successors(subnet):
             child_start = child_net[0]
 
-            pathlen = len(max(nx.all_simple_edge_paths(res, parent_start,  child_start), key=len))
+            pathlen = len(max(nx.all_simple_edge_paths(res, parent_start, child_start), key=len))
             h = max(h, pathlen)
 
     res.graph['h'] = h
-
 
     return res

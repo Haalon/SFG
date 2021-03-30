@@ -19,8 +19,3 @@ restore
     Functions, related to grammar induction
 
 """
-import SFG.grammar
-import SFG.restore
-import SFG.pnet
-
-# __all__ = SFG.grammar.__all__ + SFG.restore.__all__ + SFG.pnet.__all__

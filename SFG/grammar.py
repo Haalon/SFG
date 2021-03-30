@@ -1,6 +1,6 @@
 """Additional, useful functions that work on context-free grammars from `nltk`"""
-from nltk import CFG, Nonterminal, Production
-from nltk.grammar import is_nonterminal, is_terminal
+from nltk import CFG, Production
+from nltk.grammar import is_nonterminal
 import itertools
 import sys
 
@@ -20,6 +20,7 @@ __all__ = [
     'generate'
 ]
 
+
 def terminals(g):
     """Get set of grammar's terminals
 
@@ -36,6 +37,7 @@ def terminals(g):
     nltk.CFG
     """
     return set(g._lexical_index.keys())
+
 
 def nonterminals(g):
     """Get set of grammar's nonterminals
@@ -54,8 +56,9 @@ def nonterminals(g):
     """
     return g._categories.copy()
 
+
 def children(g, parent):
-    """Get Nonterminals that are used in a production or nonterminal productions   
+    """Get Nonterminals that are used in a production or nonterminal productions
 
     Parameters
     ----------
@@ -80,10 +83,11 @@ def children(g, parent):
 
     for prod in prods:
         for item in prod.rhs():
-                if is_nonterminal(item):
-                    res.add(item)
+            if is_nonterminal(item):
+                res.add(item)
 
     return res
+
 
 def endings(g, n):
     """Get right hand sides that consist only of terminals
@@ -107,6 +111,7 @@ def endings(g, n):
     for prod in g.productions(n):
         if all(not is_nonterminal(item) for item in prod.rhs()):
             res.add(prod.rhs())
+
 
 def remove_production(g, prod):
     """Remove production from a grammar
@@ -132,6 +137,7 @@ def remove_production(g, prod):
 
     return CFG(prods)
 
+
 def remove_nonterminal(g, nont):
     """Remove nonterminal from a grammar
 
@@ -152,6 +158,7 @@ def remove_nonterminal(g, nont):
     prods = [p for p in g.productions() if p.lhs() != nont and nont not in p.rhs()]
 
     return CFG(prods)
+
 
 def add_production(g, prod):
     """Add production to a grammar
@@ -174,6 +181,7 @@ def add_production(g, prod):
     prods.append(prod)
 
     return CFG(prods)
+
 
 def is_separated(g):
     """Check if grmmar is separated
@@ -208,8 +216,9 @@ def is_separated(g):
                 return False
 
             starts.add(start)
- 
+
     return True
+
 
 def unreachable(g):
     """Get set of unreachable nonterminals in grammar
@@ -243,13 +252,14 @@ def unreachable(g):
         n = queue.pop()
         completed.add(n)
 
-        for child in children(g,n):         
+        for child in children(g, n):
             if child not in completed:
                 queue.add(child)
 
     nonts = set(nonterminals(g))
 
     return nonts.difference(completed)
+
 
 def useless(g):
     """Get set of useless nonterminals in grammar
@@ -278,7 +288,7 @@ def useless(g):
     """
     nonts = set(nonterminals(g))
 
-    useful = {n for n in nonts if endings(g,n)}
+    useful = {n for n in nonts if endings(g, n)}
     change = True
 
     while change:
@@ -291,12 +301,13 @@ def useless(g):
                     change = True
                     break
 
-    return nonts.difference(useful) 
+    return nonts.difference(useful)
+
 
 def nonterm_equal(g, n1, n2):
     """Check if nonterminals may produce the same language
 
-    Assumes that other nonterminals all produce different languages 
+    Assumes that other nonterminals all produce different languages
 
     Parameters
     ----------
@@ -335,11 +346,11 @@ def nonterm_equal(g, n1, n2):
         if from_ not in t:
             return tuple(t)
 
-        l = list(t)
-        i = l.index(from_)
-        l[i] = to
+        ls = list(t)
+        i = ls.index(from_)
+        ls[i] = to
 
-        return rename(l, from_, to)
+        return rename(ls, from_, to)
 
     rules1 = {rename(r, n2, n1) for r in rules1}
     rules2 = {rename(r, n2, n1) for r in rules2}
@@ -348,6 +359,7 @@ def nonterm_equal(g, n1, n2):
         return False
     else:
         return True
+
 
 def check_canonical(g):
     """Check grammar for canonical rules violation
@@ -414,11 +426,12 @@ def check_canonical(g):
     if trash1 or trash2:
         broken_rules.add(2)
 
-    for n1,n2 in itertools.combinations(nonts, 2):
+    for n1, n2 in itertools.combinations(nonts, 2):
         if nonterm_equal(g, n1, n2):
             broken_rules.add(5)
- 
+
     return broken_rules
+
 
 def apply_production(sent, prod):
     res = []
@@ -465,7 +478,6 @@ def generate(grammar, start=None, depth=None, maxlen=None, n=None):
         iter = itertools.islice(iter, n)
 
     return iter
-
 
 
 def _generate_all(grammar, items, depth, maxlen):
