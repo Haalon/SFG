@@ -14,7 +14,7 @@ __all__ = [
     'add_production',
     'is_separated',
     'unreachable',
-    'useless',
+    'unproductive',
     'check_canonical',
     'apply_production',
     'generate'
@@ -261,10 +261,10 @@ def unreachable(g):
     return nonts.difference(completed)
 
 
-def useless(g):
-    """Get set of useless nonterminals in grammar
+def unproductive(g):
+    """Get set of unproductive nonterminals in grammar
 
-    Example of grammar with useless nonterminal:
+    Example of grammar with unproductive nonterminal:
 
     S -> 'a' A | 'b' B
 
@@ -272,7 +272,7 @@ def useless(g):
 
     B -> 'b' B
 
-    Here B is useless
+    Here B is unproductive
 
     Parameters
     ----------
@@ -367,7 +367,7 @@ def check_canonical(g):
     These rules are (in simple words):
 
     #. Starting symbol must not appear in any rhs
-    #. There should be no useless or unreachable nonterminals
+    #. There should be no unproductive or unreachable nonterminals
     #. All nonterminals, except starting one, must have more than one production
     #. For all nonterminals, except starting one, all its productions must not end with the same terminal
     #. Every pair of nonterminals, except with starting one, must produce different languages
@@ -420,7 +420,7 @@ def check_canonical(g):
         if num == 1:
             broken_rules.add(3)
 
-    trash1 = useless(g)
+    trash1 = unproductive(g)
     trash2 = unreachable(g)
 
     if trash1 or trash2:

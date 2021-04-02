@@ -285,7 +285,7 @@ class Pnet(nx.MultiDiGraph):
         end = end if end is not None else self.end
         return len(max(list(nx.all_simple_edge_paths(self, start, end)), key=len, default=[]))
 
-    def sents(self, start=None, end=None, cutoff=None):
+    def sents(self, start=None, end=None, maxlen=None):
         """Generate sentences from paths between start and end nodes
 
         Parameters
@@ -294,7 +294,7 @@ class Pnet(nx.MultiDiGraph):
             node to start sentence from
         end : int, default self.end
             node where the sentence ends
-        cutoff : int, default None
+        maxlen : int, default None
             maximum length (in the number of keys) of sentences to return,
             unlimited if equals to None
 
@@ -310,7 +310,7 @@ class Pnet(nx.MultiDiGraph):
         start = start if start is not None else self.start
         end = end if end is not None else self.end
 
-        paths = nx.all_simple_edge_paths(self, start, end, cutoff=cutoff)
+        paths = nx.all_simple_edge_paths(self, start, end, cutoff=maxlen)
 
         for path in paths:
             sent = []
