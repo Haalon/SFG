@@ -1,6 +1,7 @@
 """Additional, useful functions that work on context-free grammars from `nltk`"""
 from nltk import CFG, Production
 from nltk.grammar import is_nonterminal
+from nltk.parse.recursivedescent import RecursiveDescentParser
 import itertools
 import sys
 
@@ -17,8 +18,48 @@ __all__ = [
     'unproductive',
     'check_canonical',
     'apply_production',
-    'generate'
+    'generate',
+    'check_grammar'
 ]
+
+
+def check_grammar(g, sent):
+    """Check if sentence can be produced by grammar
+
+    Grammar syntax example:
+
+    S -> 'c' A 'a' B | 'b'
+
+    A -> 'a' A | 'A'
+
+    B -> 'b' A
+
+    Parameters
+    ----------
+    g : nltk.CFG
+        grammar to check
+
+    sents: str
+        sentence to check
+
+    Returns
+    -------
+    bool
+
+    See Also
+    --------
+    CFG.grammar
+    """
+    parser = RecursiveDescentParser(g)
+
+    try:
+        if not list(parser.parse(sent)):
+            return False
+
+    except ValueError:
+        return False
+
+    return True
 
 
 def terminals(g):

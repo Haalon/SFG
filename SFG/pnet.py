@@ -496,13 +496,13 @@ class Pnet(nx.MultiDiGraph):
         other_start = other_start if other_start is not None else other.start
         other_end = other_end if other_end is not None else other.end
 
-        s_sents = set(tuple(s) for s in self.sents(self_start, self_end, cutoff=t))
+        s_sents = set(tuple(s) for s in self.sents(self_start, self_end, maxlen=t))
 
         # for every outgoing edge from start node, there must exist a path with a length <= t through this edge
         if not all(any(s[0] == k for s in s_sents) for _, _, k in self.out_edges(self_start, keys=True)):
             return False
 
-        o_sents = set(tuple(s) for s in other.sents(other_start, other_end, cutoff=t))
+        o_sents = set(tuple(s) for s in other.sents(other_start, other_end, maxlen=t))
 
         if not all(any(s[0] == k for s in o_sents) for _, _, k in other.out_edges(other_start, keys=True)):
             return False

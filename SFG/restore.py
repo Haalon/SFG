@@ -1,6 +1,5 @@
 """Functions, related to grammar induction"""
 import networkx as nx
-from nltk.parse.recursivedescent import RecursiveDescentParser
 from nltk import CFG
 from nltk.grammar import is_nonterminal
 import itertools
@@ -8,7 +7,7 @@ from functools import cmp_to_key
 
 from SFG.pnet import Pnet
 from SFG.utils import equivalence_partition
-from SFG.grammar import nonterminals, generate
+from SFG.grammar import nonterminals, generate, check_grammar
 
 __all__ = [
     "restore",
@@ -124,45 +123,6 @@ def restore_all(sents, mint=None, maxt=None, minh=None, maxh=None):
             print(f'Fail with t={t}, h={h}')
 
     return res
-
-
-def check_grammar(g, sent):
-    """Check if sentence can be produced by grammar
-
-    Grammar syntax example:
-
-    S -> 'c' A 'a' B | 'b'
-
-    A -> 'a' A | 'A'
-
-    B -> 'b' A
-
-    Parameters
-    ----------
-    g : nltk.CFG
-        grammar to check
-
-    sents: str
-        sentence to check
-
-    Returns
-    -------
-    bool
-
-    See Also
-    --------
-    CFG.grammar
-    """
-    parser = RecursiveDescentParser(g)
-
-    try:
-        if not list(parser.parse(sent)):
-            return False
-
-    except ValueError:
-        return False
-
-    return True
 
 
 def _net_transform_step(net, step_type='factorization', t=None, h=None):
