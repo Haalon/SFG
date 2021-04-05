@@ -14,7 +14,8 @@ __all__ = [
     "restore_all",
     "net_transform",
     "net_to_grammar",
-    "min_pnet"
+    "min_pnet",
+    "_minimal_different_sents"
 ]
 
 
@@ -326,27 +327,48 @@ def _minimal_different_sents(g):
     def differs(sset, list):
         count = 0
         for s in list:
-            if not sset.difference(s):
+            common = sset.intersection(s)
+            if len(common) == len(sset) or len(common) == len(s):
                 count += 1
 
             if count > 1:
                 return False
 
         return True
+    # def differs(set1, set2):
+    #     common = set1.intersection(set2)
+
+    #     if len(common) == len(set1) or len(common) == len(set2):
+    #         return False
+
+    #     return True
 
     queue = nonterminals(g)
+    nont_len   = {}
+    nont_sents = {}
     res = {}
 
-    maxlen = 1
-    while queue:
-        sets = {nont: _generate_sents(g, nont, maxlen) for nont in queue}
+    for nont in queue:
+        maxlen = 1
 
-        for nont, sents in sets.items():
-            if sents and differs(sents, sets.values()):
+        sents =  _generate_sents(g, nont, maxlen)
+        while not sents:
+            maxlen += 1
+            sents =  _generate_sents(g, nont, maxlen)
+
+        nont_len[nont] = maxlen
+        nont_sents[nont]  = sents
+
+    while queue:
+        for nont in queue.copy():
+            sents = nont_sents[nont]
+            if differs(sents, nont_sents.values()):
                 res[nont] = sents
                 queue.remove(nont)
 
-        maxlen += 1
+        for nont in queue:
+            nont_len[nont] += 1
+            nont_sents[nont] = _generate_sents(g, nont, nont_len[nont])
 
     return res
 
